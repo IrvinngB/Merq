@@ -25,7 +25,11 @@ def extract_text_from_pdf(file_content: bytes) -> str:
         page_text = page.extract_text()
         if page_text:
             text_parts.append(page_text)
-    return "\n\n".join(text_parts)
+    text = "\n\n".join(text_parts)
+    # Limpiar caracteres NUL y otros caracteres no válidos para PostgreSQL
+    text = text.replace('\x00', '')
+    text = ''.join(char for char in text if char.isprintable() or char in '\n\r\t')
+    return text
 
 
 def truncate_content(content: str, max_length: int = MAX_CONTENT_LENGTH) -> str:
@@ -131,36 +135,34 @@ def generate_roadmap(content: str, title: str) -> dict:
     """
     processed_content = truncate_content(content)
 
-    prompt = f"""Eres un experto en diseño curricular y rutas de aprendizaje. Analiza el contenido y crea un roadmap educativo completo y detallado.
+    prompt = f"""Eres un experto en diseño de rutas de aprendizaje. Analiza el contenido y crea un roadmap educativo completo.
 
-IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin explicaciones ni texto adicional.
+RESPONDE ÚNICAMENTE CON JSON VÁLIDO. Sin texto adicional.
 
-Estructura JSON requerida:
+Formato JSON requerido:
 {{
-  "description": "Descripción general del roadmap (2-3 oraciones)",
+  "description": "Descripción breve del roadmap",
   "nodes": [
-    {{"title": "Nombre del tema", "description": "Breve descripción de qué aprender", "level": "beginner", "order": 0, "prerequisites": []}}
+    {{"title": "Tema", "description": "Qué aprenderás", "level": "beginner", "order": 0, "prerequisites": []}}
   ]
 }}
 
-NIVELES (distribuir equitativamente):
-- beginner: Fundamentos y conceptos básicos (4-5 nodos)
-- intermediate: Aplicación práctica y profundización (4-5 nodos)  
-- advanced: Temas avanzados y especialización (3-4 nodos)
+ESTRUCTURA DEL ROADMAP:
+- beginner (4-6 nodos): Fundamentos y conceptos básicos esenciales
+- intermediate (4-6 nodos): Aplicación práctica y técnicas intermedias  
+- advanced (3-5 nodos): Temas avanzados y especialización
 
-REGLAS ESTRICTAS:
-1. Genera entre 12-15 nodos en total
-2. Cada nivel DEBE tener al menos 4 nodos
-3. Los títulos deben ser concisos (3-6 palabras)
-4. Las descripciones deben explicar qué se aprenderá (1-2 oraciones)
-5. prerequisites: array de índices (order) de nodos que deben completarse antes
-6. Los nodos beginner tienen prerequisites: []
-7. Los nodos intermediate dependen de nodos beginner
-8. Los nodos advanced dependen de nodos intermediate o beginner
-9. Crea conexiones lógicas entre temas relacionados
+REGLAS:
+1. Total: 12-17 nodos bien distribuidos
+2. Títulos concisos: 2-5 palabras máximo
+3. Descripciones claras: 1 oración explicando qué se aprende
+4. order: número secuencial empezando en 0
+5. prerequisites: array con los "order" de nodos previos necesarios
+   - beginner: siempre []
+   - intermediate: [indices de 1-2 nodos beginner]
+   - advanced: [indices de 1-2 nodos intermediate]
 
-EJEMPLO de nodo bien estructurado:
-{{"title": "Variables y tipos de datos", "description": "Aprende a declarar variables, tipos primitivos y conversiones de datos", "level": "beginner", "order": 0, "prerequisites": []}}
+IMPORTANTE: Extrae los temas más relevantes del contenido proporcionado.
 
 Título del roadmap: {title}
 
@@ -179,21 +181,27 @@ def generate_node_content(source_content: str, node_title: str, node_description
     """
     processed_content = truncate_content(source_content)
 
-    prompt = f"""Genera contenido educativo para el tema "{node_title}".
+    prompt = f"""Genera contenido educativo detallado para el tema "{node_title}".
 
-IMPORTANTE: Responde SOLO con JSON válido.
+RESPONDE ÚNICAMENTE CON JSON VÁLIDO.
 
-El campo "content" debe usar Markdown con:
-- **Negritas** para conceptos clave
-- Listas con viñetas para puntos importantes
-- `código` para términos técnicos
-- Secciones claras con ## headers
+El campo "content" debe ser Markdown bien estructurado con:
+- ## Headers para secciones
+- **Negritas** para conceptos importantes
+- Listas con viñetas (-)
+- `código` para términos técnicos si aplica
 
-Formato JSON requerido:
-{{"content": "## Descripción\\n\\nExplicación del tema...\\n\\n## Qué investigar\\n\\n- Punto 1\\n- Punto 2\\n\\n## Recursos sugeridos\\n\\n- Recurso 1\\n- Recurso 2\\n\\n## Conceptos clave\\n\\n- **Concepto**: explicación"}}
+Estructura del contenido:
+1. Breve introducción al tema
+2. Conceptos clave a dominar
+3. Pasos o puntos importantes
+4. Tips prácticos
+
+Formato JSON:
+{{"content": "## Introducción\\n\\nExplicación clara del tema...\\n\\n## Conceptos Clave\\n\\n- **Concepto 1**: explicación\\n- **Concepto 2**: explicación\\n\\n## Puntos Importantes\\n\\n1. Primer punto\\n2. Segundo punto\\n\\n## Tips\\n\\n- Tip práctico 1\\n- Tip práctico 2"}}
 
 Tema: {node_title}
-Descripción: {node_description}
+Contexto: {node_description}
 
 Material de referencia:
 {processed_content}

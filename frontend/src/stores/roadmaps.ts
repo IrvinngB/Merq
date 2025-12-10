@@ -146,6 +146,22 @@ export const useRoadmapsStore = defineStore('roadmaps', () => {
     }
   }
 
+  async function toggleNodeComplete(roadmapId: number, nodeId: number) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return
+    
+    try {
+      const response = await roadmapsApi.toggleNodeComplete(roadmapId, nodeId, !node.is_completed)
+      const index = nodes.value.findIndex(n => n.id === nodeId)
+      if (index !== -1) nodes.value[index] = response.data
+      return response.data
+    } catch (err) {
+      const axiosError = err as AxiosError<{ detail?: string }>
+      error.value = axiosError.response?.data?.detail || 'Error al actualizar nodo'
+      throw err
+    }
+  }
+
   function clearCurrent() {
     currentRoadmap.value = null
     currentNode.value = null
@@ -174,6 +190,7 @@ export const useRoadmapsStore = defineStore('roadmaps', () => {
     createNode,
     updateNode,
     deleteNode,
+    toggleNodeComplete,
     clearCurrent,
     clearNode
   }

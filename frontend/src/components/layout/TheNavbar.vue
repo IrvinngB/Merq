@@ -59,12 +59,6 @@ function handleLogout() {
               Dashboard
             </RouterLink>
             <RouterLink
-              :to="userRoutes.coursesNew"
-              class="bg-primary text-white hover:bg-primary-hover px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md"
-            >
-              + Nuevo Curso
-            </RouterLink>
-            <RouterLink
               :to="userRoutes.settings"
               class="text-text-secondary hover:text-text p-2.5 rounded-xl hover:bg-bg-secondary transition-all"
               title="Configuración"

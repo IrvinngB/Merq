@@ -10,6 +10,7 @@ export interface RoadmapNode {
   position_x: number
   position_y: number
   order_index: number
+  is_completed: boolean
 }
 
 export interface NodeConnection {
@@ -39,6 +40,7 @@ export interface NodeCreate {
   position_x?: number
   position_y?: number
   order_index?: number
+  is_completed?: boolean
 }
 
 export const roadmapsApi = {
@@ -71,6 +73,9 @@ export const roadmapsApi = {
 
   deleteNode: (roadmapId: number, nodeId: number) => 
     apiClient.delete(`/roadmaps/${roadmapId}/nodes/${nodeId}`),
+
+  toggleNodeComplete: (roadmapId: number, nodeId: number, isCompleted: boolean) =>
+    apiClient.patch<RoadmapNode>(`/roadmaps/${roadmapId}/nodes/${nodeId}`, { is_completed: isCompleted }),
 
   getConnections: (roadmapId: number) => 
     apiClient.get<NodeConnection[]>(`/roadmaps/${roadmapId}/connections`),
@@ -107,6 +112,26 @@ export const aiApi = {
       `/ai/nodes/${nodeId}/generate-content`,
       {},
       { timeout: 120000 }
+    )
+  },
+
+  importRoadmap: (title: string, creatorId: number, data: {
+    description?: string
+    nodes: Array<{
+      title: string
+      description?: string | null
+      level: string
+      order: number
+      prerequisites: number[]
+    }>
+  }) => {
+    return apiClient.post<{ roadmap_id: number; title: string; nodes_count: number; message: string }>(
+      '/ai/import-roadmap',
+      {
+        title,
+        creator_id: creatorId,
+        data
+      }
     )
   }
 }

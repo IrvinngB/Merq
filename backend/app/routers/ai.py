@@ -1,5 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
 
 from app.core.database import get_db
 from app.services.ai_service import extract_text_from_pdf, generate_roadmap, generate_node_content
@@ -11,11 +13,11 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 ALLOWED_EXTENSIONS = {"pdf", "txt"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
-LEVEL_POSITIONS = {
-    "beginner": {"y": 0},
-    "intermediate": {"y": 200},
-    "advanced": {"y": 400}
-}
+# Configuración de layout - máximo 8 nodos por fila
+MAX_NODES_PER_ROW = 8
+NODE_WIDTH = 170
+NODE_GAP_X = 16
+NODE_GAP_Y = 70
 
 
 @router.post("/generate-roadmap")
@@ -86,14 +88,31 @@ async def generate_roadmap_from_file(
     nodes_data = roadmap_data.get("nodes", [])
     created_nodes = {}
     level_counters = {"beginner": 0, "intermediate": 0, "advanced": 0}
+    
+    # Calcular posiciones basadas en el nuevo layout
+    def calculate_position(level: str, index_in_level: int) -> tuple[int, int]:
+        """Calcula x, y para un nodo basado en su nivel e índice."""
+        level_order = {"beginner": 0, "intermediate": 1, "advanced": 2}
+        
+        row = index_in_level // MAX_NODES_PER_ROW
+        col = index_in_level % MAX_NODES_PER_ROW
+        
+        # Y basado en el nivel y la fila dentro del nivel
+        base_y = level_order.get(level, 0) * 150
+        y = base_y + row * (50 + 12)
+        
+        # X centrado
+        x = col * (NODE_WIDTH + NODE_GAP_X)
+        
+        return x, y
 
     for node_data in nodes_data:
         level_str = node_data.get("level", "beginner")
         level = NodeLevel(level_str) if level_str in [l.value for l in NodeLevel] else NodeLevel.BEGINNER
         
-        position_x = level_counters.get(level.value, 0) * 250
-        position_y = LEVEL_POSITIONS.get(level.value, {"y": 0})["y"]
-        level_counters[level.value] = level_counters.get(level.value, 0) + 1
+        index_in_level = level_counters.get(level.value, 0)
+        position_x, position_y = calculate_position(level.value, index_in_level)
+        level_counters[level.value] = index_in_level + 1
 
         node = node_service.create(
             roadmap_id=roadmap.id,
@@ -170,3 +189,121 @@ async def generate_node_content_endpoint(
         "message": "Contenido del nodo generado exitosamente",
         "node_id": node_id
     }
+
+
+# === IMPORT JSON ENDPOINT ===
+
+class ImportNodeData(BaseModel):
+    title: str
+    description: Optional[str] = None
+    level: str = "beginner"
+    order: int = 0
+    prerequisites: list[int] = []
+
+
+class ImportRoadmapData(BaseModel):
+    description: Optional[str] = None
+    nodes: list[ImportNodeData]
+
+
+class ImportRoadmapRequest(BaseModel):
+    title: str
+    creator_id: int
+    data: ImportRoadmapData
+
+
+@router.post("/import-roadmap")
+async def import_roadmap_from_json(
+    request: ImportRoadmapRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Importa un roadmap desde un JSON generado externamente (Claude, GPT, Gemini, etc).
+    
+    El JSON debe tener la estructura:
+    {
+        "title": "Título del roadmap",
+        "creator_id": 1,
+        "data": {
+            "description": "Descripción del roadmap",
+            "nodes": [
+                {"title": "Tema", "description": "...", "level": "beginner", "order": 0, "prerequisites": []}
+            ]
+        }
+    }
+    """
+    roadmap_service = RoadmapService(db)
+    node_service = NodeService(db)
+
+    # Validar que hay nodos
+    if not request.data.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El roadmap debe tener al menos un nodo"
+        )
+
+    # Validar niveles
+    valid_levels = {"beginner", "intermediate", "advanced"}
+    for node_data in request.data.nodes:
+        if node_data.level not in valid_levels:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Nivel inválido '{node_data.level}' en nodo '{node_data.title}'. Use: {', '.join(valid_levels)}"
+            )
+
+    # Crear roadmap
+    roadmap = roadmap_service.create(
+        title=request.title,
+        description=request.data.description or f"Roadmap importado: {request.title}",
+        source_content=None,  # No hay contenido fuente al importar
+        creator_id=request.creator_id
+    )
+
+    # Calcular posiciones
+    level_counters = {"beginner": 0, "intermediate": 0, "advanced": 0}
+    
+    def calculate_position(level: str, index_in_level: int) -> tuple[int, int]:
+        level_order = {"beginner": 0, "intermediate": 1, "advanced": 2}
+        row = index_in_level // MAX_NODES_PER_ROW
+        col = index_in_level % MAX_NODES_PER_ROW
+        base_y = level_order.get(level, 0) * 150
+        y = base_y + row * (50 + 12)
+        x = col * (NODE_WIDTH + NODE_GAP_X)
+        return x, y
+
+    # Crear nodos
+    created_nodes = {}
+    for node_data in request.data.nodes:
+        level = NodeLevel(node_data.level)
+        index_in_level = level_counters.get(node_data.level, 0)
+        position_x, position_y = calculate_position(node_data.level, index_in_level)
+        level_counters[node_data.level] = index_in_level + 1
+
+        node = node_service.create(
+            roadmap_id=roadmap.id,
+            title=node_data.title,
+            description=node_data.description,
+            level=level,
+            position_x=position_x,
+            position_y=position_y,
+            order_index=node_data.order
+        )
+        created_nodes[node_data.order] = node
+
+    # Crear conexiones basadas en prerequisites
+    for node_data in request.data.nodes:
+        if node_data.order in created_nodes:
+            for prereq_order in node_data.prerequisites:
+                if prereq_order in created_nodes:
+                    node_service.create_connection(
+                        from_node_id=created_nodes[prereq_order].id,
+                        to_node_id=created_nodes[node_data.order].id
+                    )
+
+    return {
+        "roadmap_id": roadmap.id,
+        "title": roadmap.title,
+        "nodes_count": len(request.data.nodes),
+        "message": "Roadmap importado exitosamente"
+    }
+

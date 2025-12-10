@@ -26,6 +26,7 @@ class NodeCreate(BaseModel):
     position_x: int = 0
     position_y: int = 0
     order_index: int = 0
+    is_completed: bool = False
 
 
 class NodeUpdate(BaseModel):
@@ -36,6 +37,7 @@ class NodeUpdate(BaseModel):
     position_x: int | None = None
     position_y: int | None = None
     order_index: int | None = None
+    is_completed: bool | None = None
 
 
 class ConnectionCreate(BaseModel):
@@ -62,6 +64,7 @@ class NodeResponse(BaseModel):
     position_x: int
     position_y: int
     order_index: int
+    is_completed: bool
 
     class Config:
         from_attributes = True

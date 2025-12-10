@@ -24,11 +24,11 @@ import { BaseButton, BaseCard } from '@/components/common'
             </div>
             
             <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-text mb-6 leading-tight">
-              Aprende más rápido con
-              <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-hover"> rutas personalizadas</span>
+              Transforma cualquier contenido en
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-hover"> roadmaps interactivos</span>
             </h1>
             <p class="text-lg md:text-xl text-text-secondary mb-10 leading-relaxed max-w-xl mx-auto lg:mx-0">
-              Sube el material de tu profesor y nuestra IA creará un plan de estudio adaptado a ti, con módulos, lecciones y preguntas de práctica.
+              Sube un PDF o pega texto y nuestra IA generará un roadmap visual con nodos conectados, organizado por niveles de dificultad.
             </p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <RouterLink to="/auth/register">
@@ -75,19 +75,17 @@ import { BaseButton, BaseCard } from '@/components/common'
                     <div class="w-3 h-3 rounded-full bg-warning/60" />
                     <div class="w-3 h-3 rounded-full bg-success/60" />
                   </div>
-                  <span class="text-sm text-text-secondary">Mi curso de Cálculo</span>
+                  <span class="text-sm text-text-secondary">Roadmap: Machine Learning</span>
                 </div>
                 
                 <div class="space-y-3">
-                  <div class="flex items-center gap-3 p-3 bg-bg-secondary rounded-xl">
-                    <div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
-                      <span class="text-primary font-semibold">1</span>
+                  <div class="flex items-center gap-3 p-3 bg-success/10 rounded-xl border border-success/30">
+                    <div class="w-10 h-10 bg-success/20 rounded-lg flex items-center justify-center">
+                      <span class="text-success text-xs font-bold">P</span>
                     </div>
                     <div class="flex-1">
-                      <p class="text-sm font-medium text-text">Límites y continuidad</p>
-                      <div class="w-full h-1.5 bg-line rounded-full mt-1.5">
-                        <div class="w-full h-full bg-success rounded-full" />
-                      </div>
+                      <p class="text-sm font-medium text-text">¿Qué es ML?</p>
+                      <p class="text-xs text-success">Principiante</p>
                     </div>
                     <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -96,24 +94,22 @@ import { BaseButton, BaseCard } from '@/components/common'
                   
                   <div class="flex items-center gap-3 p-3 bg-primary/10 rounded-xl border border-primary/30">
                     <div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
-                      <span class="text-primary font-semibold">2</span>
+                      <span class="text-primary text-xs font-bold">I</span>
                     </div>
                     <div class="flex-1">
-                      <p class="text-sm font-medium text-text">Derivadas</p>
-                      <div class="w-full h-1.5 bg-line rounded-full mt-1.5">
-                        <div class="w-3/5 h-full bg-primary rounded-full" />
-                      </div>
+                      <p class="text-sm font-medium text-text">Regresión lineal</p>
+                      <p class="text-xs text-primary">Intermedio</p>
                     </div>
-                    <span class="text-xs text-primary font-medium">60%</span>
+                    <span class="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded">En progreso</span>
                   </div>
                   
                   <div class="flex items-center gap-3 p-3 bg-bg-secondary rounded-xl opacity-60">
-                    <div class="w-10 h-10 bg-line rounded-lg flex items-center justify-center">
-                      <span class="text-text-secondary font-semibold">3</span>
+                    <div class="w-10 h-10 bg-warning/20 rounded-lg flex items-center justify-center">
+                      <span class="text-warning text-xs font-bold">A</span>
                     </div>
                     <div class="flex-1">
-                      <p class="text-sm font-medium text-text-secondary">Integrales</p>
-                      <div class="w-full h-1.5 bg-line rounded-full mt-1.5" />
+                      <p class="text-sm font-medium text-text-secondary">Redes neuronales</p>
+                      <p class="text-xs text-text-secondary">Avanzado</p>
                     </div>
                     <svg class="w-5 h-5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -146,7 +142,7 @@ import { BaseButton, BaseCard } from '@/components/common'
             ¿Cómo funciona?
           </h2>
           <p class="text-text-secondary text-lg max-w-2xl mx-auto">
-            En 3 simples pasos, convierte cualquier material de estudio en una experiencia de aprendizaje interactiva
+            En 3 simples pasos, convierte cualquier documento en un roadmap visual e interactivo
           </p>
         </div>
 
@@ -161,9 +157,9 @@ import { BaseButton, BaseCard } from '@/components/common'
                 </svg>
               </div>
               <span class="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full mb-4">PASO 1</span>
-              <h3 class="text-xl font-semibold text-text mb-3">Sube tu contenido</h3>
+              <h3 class="text-xl font-semibold text-text mb-3">Sube un PDF o texto</h3>
               <p class="text-text-secondary leading-relaxed">
-                Pega el texto, apuntes, PDF o cualquier material que te haya dado tu profesor.
+                Carga cualquier documento PDF o pega texto directamente sobre el tema que quieras aprender.
               </p>
             </div>
           </div>
@@ -176,9 +172,9 @@ import { BaseButton, BaseCard } from '@/components/common'
                 </svg>
               </div>
               <span class="inline-block text-xs font-bold text-primary-hover bg-primary-hover/10 px-3 py-1 rounded-full mb-4">PASO 2</span>
-              <h3 class="text-xl font-semibold text-text mb-3">La IA estructura</h3>
+              <h3 class="text-xl font-semibold text-text mb-3">La IA genera el roadmap</h3>
               <p class="text-text-secondary leading-relaxed">
-                Nuestra IA analiza el contenido y crea módulos, lecciones y preguntas de práctica.
+                Nuestra IA analiza el contenido y crea un grafo visual con nodos conectados por niveles.
               </p>
             </div>
           </div>
@@ -191,9 +187,9 @@ import { BaseButton, BaseCard } from '@/components/common'
                 </svg>
               </div>
               <span class="inline-block text-xs font-bold text-success bg-success/10 px-3 py-1 rounded-full mb-4">PASO 3</span>
-              <h3 class="text-xl font-semibold text-text mb-3">Aprende adaptado</h3>
+              <h3 class="text-xl font-semibold text-text mb-3">Explora y aprende</h3>
               <p class="text-text-secondary leading-relaxed">
-                Estudia a tu ritmo con un plan que se adapta a tu progreso y dificultades.
+                Navega por el grafo interactivo y genera contenido detallado bajo demanda para cada nodo.
               </p>
             </div>
           </div>
@@ -208,10 +204,10 @@ import { BaseButton, BaseCard } from '@/components/common'
           <div>
             <span class="text-primary font-medium text-sm uppercase tracking-wider">Características</span>
             <h2 class="text-3xl md:text-4xl font-bold text-text mt-3 mb-6">
-              Todo lo que necesitas para aprender mejor
+              Roadmaps inteligentes para cualquier tema
             </h2>
             <p class="text-text-secondary text-lg mb-10">
-              Merq combina inteligencia artificial con técnicas de aprendizaje probadas para ayudarte a dominar cualquier tema.
+              Merq usa IA local (Ollama) para transformar cualquier contenido en grafos de aprendizaje interactivos.
             </p>
             
             <div class="space-y-6">
@@ -222,8 +218,8 @@ import { BaseButton, BaseCard } from '@/components/common'
                   </svg>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-text mb-1">Generación instantánea</h3>
-                  <p class="text-text-secondary text-sm">Convierte cualquier contenido en un curso estructurado en segundos.</p>
+                  <h3 class="font-semibold text-text mb-1">Grafo interactivo</h3>
+                  <p class="text-text-secondary text-sm">Visualiza tu roadmap con nodos conectados, zoom y navegación intuitiva.</p>
                 </div>
               </div>
               
@@ -234,8 +230,8 @@ import { BaseButton, BaseCard } from '@/components/common'
                   </svg>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-text mb-1">Dificultad adaptativa</h3>
-                  <p class="text-text-secondary text-sm">Las preguntas se ajustan automáticamente a tu nivel de conocimiento.</p>
+                  <h3 class="font-semibold text-text mb-1">Tres niveles de dificultad</h3>
+                  <p class="text-text-secondary text-sm">Principiante, Intermedio y Avanzado con prerequisitos claros.</p>
                 </div>
               </div>
               
@@ -246,20 +242,20 @@ import { BaseButton, BaseCard } from '@/components/common'
                   </svg>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-text mb-1">Seguimiento de progreso</h3>
-                  <p class="text-text-secondary text-sm">Visualiza tu avance y áreas de mejora con estadísticas detalladas.</p>
+                  <h3 class="font-semibold text-text mb-1">Contenido bajo demanda</h3>
+                  <p class="text-text-secondary text-sm">Haz click en cualquier nodo para generar contenido detallado con Markdown.</p>
                 </div>
               </div>
               
               <div class="flex gap-4">
                 <div class="w-12 h-12 bg-warning/10 rounded-xl flex items-center justify-center flex-shrink-0">
                   <svg class="w-6 h-6 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                   </svg>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-text mb-1">Repaso espaciado</h3>
-                  <p class="text-text-secondary text-sm">Te recordamos repasar en el momento óptimo para maximizar retención.</p>
+                  <h3 class="font-semibold text-text mb-1">IA 100% local</h3>
+                  <p class="text-text-secondary text-sm">Usa Ollama con Gemma 2, sin APIs externas ni costos adicionales.</p>
                 </div>
               </div>
             </div>
@@ -269,20 +265,20 @@ import { BaseButton, BaseCard } from '@/components/common'
             <div class="absolute -inset-4 bg-gradient-to-r from-primary/10 to-success/10 rounded-3xl blur-2xl" />
             <div class="relative grid grid-cols-2 gap-4">
               <BaseCard class="p-5">
-                <div class="text-3xl font-bold text-primary mb-1">98%</div>
-                <p class="text-sm text-text-secondary">Precisión de la IA</p>
+                <div class="text-3xl font-bold text-primary mb-1">3</div>
+                <p class="text-sm text-text-secondary">Niveles por roadmap</p>
               </BaseCard>
               <BaseCard class="p-5">
-                <div class="text-3xl font-bold text-success mb-1">2x</div>
-                <p class="text-sm text-text-secondary">Más rápido</p>
+                <div class="text-3xl font-bold text-success mb-1">~2min</div>
+                <p class="text-sm text-text-secondary">Tiempo de generación</p>
               </BaseCard>
               <BaseCard class="p-5">
                 <div class="text-3xl font-bold text-primary-hover mb-1">∞</div>
-                <p class="text-sm text-text-secondary">Cursos ilimitados</p>
+                <p class="text-sm text-text-secondary">Roadmaps ilimitados</p>
               </BaseCard>
               <BaseCard class="p-5">
-                <div class="text-3xl font-bold text-warning mb-1">24/7</div>
-                <p class="text-sm text-text-secondary">Siempre disponible</p>
+                <div class="text-3xl font-bold text-warning mb-1">Local</div>
+                <p class="text-sm text-text-secondary">IA privada</p>
               </BaseCard>
             </div>
           </div>
@@ -295,17 +291,17 @@ import { BaseButton, BaseCard } from '@/components/common'
       <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00eiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
       <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">
-          ¿Listo para transformar tu forma de estudiar?
+          ¿Listo para crear tu primer roadmap?
         </h2>
         <p class="text-white/80 text-lg mb-10 max-w-2xl mx-auto">
-          Únete a miles de estudiantes que ya están aprendiendo de forma más inteligente con Merq.
+          Transforma cualquier documento en un grafo de aprendizaje interactivo en minutos.
         </p>
         <RouterLink to="/auth/register">
           <button class="bg-white text-primary hover:bg-white/90 px-8 py-4 rounded-xl text-lg font-semibold transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1">
             Crear cuenta gratis
           </button>
         </RouterLink>
-        <p class="text-white/60 text-sm mt-6">Sin tarjeta de crédito • Acceso inmediato</p>
+        <p class="text-white/60 text-sm mt-6">Sin tarjeta de crédito • IA 100% local</p>
       </div>
     </section>
   </div>

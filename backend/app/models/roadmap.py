@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Enum as SQLEnum, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Enum as SQLEnum, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -38,6 +38,7 @@ class RoadmapNode(Base):
     position_x = Column(Integer, default=0)
     position_y = Column(Integer, default=0)
     order_index = Column(Integer, default=0)
+    is_completed = Column(Boolean, default=False)
 
     roadmap = relationship("Roadmap", back_populates="nodes")
     connections_from = relationship(
