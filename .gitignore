@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.db
+*.sqlite3
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Uploads
+uploads/
+*.pdf
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend
+backend/__pycache__/
+backend/.pytest_cache/
+backend/app/__pycache__/
+backend/app/**/__pycache__/
+
+# Temporary
+*.tmp
+*.temp
+.cache/
