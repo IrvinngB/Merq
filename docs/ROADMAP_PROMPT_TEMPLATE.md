@@ -36,37 +36,42 @@ Formato JSON requerido:
   ]
 }
 
-ESTRUCTURA DEL ROADMAP:
+ESTRUCTURA OBLIGATORIA DEL ROADMAP (MÍNIMO 3, MÁXIMO 8 nodos por nivel):
 
-### Nivel Beginner (4-6 nodos)
+### Nivel Beginner (3-8 nodos) - OBLIGATORIO
 - Fundamentos y conceptos básicos esenciales
 - Lo que todo principiante necesita saber primero
 - prerequisites: siempre [] (array vacío)
 
-### Nivel Intermediate (4-6 nodos)  
+### Nivel Intermediate (3-8 nodos) - OBLIGATORIO
 - Aplicación práctica y técnicas intermedias
 - Construye sobre los fundamentos
 - prerequisites: [indices de 1-2 nodos beginner relacionados]
 
-### Nivel Advanced (3-5 nodos)
-- Temas avanzados y especialización
+### Nivel Advanced (3-8 nodos) - OBLIGATORIO
+- Temas avanzados, especialización y casos de uso complejos
 - Requiere dominio de temas intermedios
+- Incluye optimización, mejores prácticas y aplicaciones avanzadas
 - prerequisites: [indices de 1-2 nodos intermediate relacionados]
 
-REGLAS IMPORTANTES:
+REGLAS CRÍTICAS:
 
-1. Total de nodos: 12-17 bien distribuidos entre los 3 niveles
-2. Títulos: Concisos, 2-5 palabras máximo
-3. Descripciones: 1 oración clara explicando qué se aprende
-4. order: Número secuencial empezando en 0, 1, 2, 3...
-5. level: Solo puede ser "beginner", "intermediate" o "advanced" (en minúsculas)
-6. prerequisites: 
+1. OBLIGATORIO: Cada nivel DEBE tener MÍNIMO 3 nodos y MÁXIMO 8 nodos
+2. Total de nodos: 9-24 bien distribuidos entre los 3 niveles
+3. Títulos: Concisos, 2-5 palabras máximo
+4. Descripciones: 1 oración clara explicando qué se aprende
+5. order: Número secuencial empezando en 0, 1, 2, 3...
+6. level: Solo puede ser "beginner", "intermediate" o "advanced" (en minúsculas)
+7. prerequisites: 
    - Array de números que representan el "order" de nodos previos
    - beginner: siempre []
    - intermediate: [1-2 índices de nodos beginner]
    - advanced: [1-2 índices de nodos intermediate]
 
-IMPORTANTE: Extrae los temas más relevantes y organízalos en una progresión lógica de aprendizaje.
+IMPORTANTE: 
+- NUNCA generes menos de 3 nodos en NINGÚN nivel
+- El nivel "advanced" es TAN IMPORTANTE como los otros
+- Si no hay suficientes temas avanzados, genera temas de optimización, mejores prácticas o casos especiales
 
 Título del roadmap: [TÍTULO DEL ROADMAP]
 

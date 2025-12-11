@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.core.database import get_db
-from app.services.ai_service import extract_text_from_pdf, generate_roadmap, generate_node_content
+from app.services.ai_service import extract_text_from_pdf, generate_roadmap, generate_node_content, generate_content_summary
 from app.services.roadmap_service import RoadmapService, NodeService
 from app.models import NodeLevel
 
@@ -78,14 +78,26 @@ async def generate_roadmap_from_file(
     roadmap_service = RoadmapService(db)
     node_service = NodeService(db)
 
+    nodes_data = roadmap_data.get("nodes", [])
+    
+    # Generar resumen del contenido en lugar de guardar todo el texto
+    try:
+        content_summary = generate_content_summary(
+            content=text_content,
+            roadmap_title=title,
+            nodes_info=nodes_data
+        )
+    except Exception as e:
+        # Si falla el resumen, usar una versión truncada simple
+        content_summary = text_content[:2500] + "..." if len(text_content) > 2500 else text_content
+
     roadmap = roadmap_service.create(
         title=title,
         description=roadmap_data.get("description", f"Roadmap generado a partir de {file.filename}"),
-        source_content=text_content,
+        source_content=content_summary,  # Guardar resumen, no todo el contenido
         creator_id=creator_id
     )
 
-    nodes_data = roadmap_data.get("nodes", [])
     created_nodes = {}
     level_counters = {"beginner": 0, "intermediate": 0, "advanced": 0}
     
@@ -231,6 +243,9 @@ async def import_roadmap_from_json(
             ]
         }
     }
+    
+    Requisitos:
+    - Cada nivel (beginner, intermediate, advanced) debe tener entre 3 y 8 nodos
     """
     roadmap_service = RoadmapService(db)
     node_service = NodeService(db)
@@ -242,13 +257,32 @@ async def import_roadmap_from_json(
             detail="El roadmap debe tener al menos un nodo"
         )
 
-    # Validar niveles
+    # Validar niveles y contar nodos por nivel
     valid_levels = {"beginner", "intermediate", "advanced"}
+    level_counts = {"beginner": 0, "intermediate": 0, "advanced": 0}
+    
     for node_data in request.data.nodes:
         if node_data.level not in valid_levels:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Nivel inválido '{node_data.level}' en nodo '{node_data.title}'. Use: {', '.join(valid_levels)}"
+            )
+        level_counts[node_data.level] += 1
+    
+    # Validar cantidad de nodos por nivel (mínimo 2, máximo 8) - más flexible para importación
+    MIN_NODES_PER_LEVEL = 2
+    MAX_NODES_PER_LEVEL = 8
+    
+    for level, count in level_counts.items():
+        if count < MIN_NODES_PER_LEVEL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El nivel '{level}' tiene {count} nodo(s). Se requieren mínimo {MIN_NODES_PER_LEVEL} nodos por nivel."
+            )
+        if count > MAX_NODES_PER_LEVEL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El nivel '{level}' tiene {count} nodos. Se permiten máximo {MAX_NODES_PER_LEVEL} nodos por nivel."
             )
 
     # Crear roadmap
