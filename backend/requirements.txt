@@ -12,5 +12,6 @@ httpx
 email-validator
 python-magic
 python-multipart
-pypdf2
+pdfplumber
 ollama
+google-generativeai

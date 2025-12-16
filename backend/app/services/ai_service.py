@@ -1,47 +1,92 @@
-import os
+"""
+AI Service - Roadmap Generation
+Business Logic Layer
+- Uses ai_provider.py for connections
+- Handles Prompt Engineering & Parsing
+"""
+
 import json
 import re
 from io import BytesIO
-from PyPDF2 import PdfReader
-from ollama import Client
+import pdfplumber
+from .ai_provider import AIGateway
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2")
+# Initialize Gateway (handles Gemini/Ollama connections)
+gateway = AIGateway()
 
-MAX_CONTENT_LENGTH = 6000
+# Content limits
+MAX_CONTENT_LENGTH = 25000 
+MAX_SUMMARY_LENGTH = 2000
 MAX_RETRIES = 3
 
+def log_ai(msg):
+    print(f"[AI SERVICE] {msg}", flush=True)
 
-def get_ollama_client() -> Client:
-    """Obtiene el cliente de Ollama."""
-    return Client(host=OLLAMA_HOST)
+def call_ai(prompt: str, json_mode: bool = False) -> str:
+    """
+    Call AI using the Gateway.
+    Strategies: Gemini -> Ollama (handled by Gateway)
+    """
+    try:
+        response_text, provider_name = gateway.generate(prompt, json_mode)
+        
+        # LOGGING
+        log_ai(f"Used Provider: {provider_name}")
+        log_ai(f"--- AI RESPONSE ({provider_name}) ---")
+        log_ai(response_text[:500] + "..." if len(response_text) > 500 else response_text)
+        log_ai("-------------------------------")
+        
+        return response_text
+    except Exception as e:
+        log_ai(f"CRITICAL AI FAILURE: {e}")
+        raise e
 
+def call_ai_text(prompt: str) -> str:
+    """Call AI for plain text response (no JSON)."""
+    return call_ai(prompt, json_mode=False)
+
+
+# =============================================================================
+# PDF EXTRACTION - Using pdfplumber
+# =============================================================================
 
 def extract_text_from_pdf(file_content: bytes) -> str:
-    """Extrae texto de un archivo PDF."""
-    reader = PdfReader(BytesIO(file_content))
+    """Extract text from PDF using pdfplumber (more robust than PyPDF2)."""
     text_parts = []
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text_parts.append(page_text)
+    
+    with pdfplumber.open(BytesIO(file_content)) as pdf:
+        for page in pdf.pages:
+            # Extract text with better handling of layouts
+            text = page.extract_text(layout=True)
+            if text:
+                text_parts.append(text)
+    
     text = "\n\n".join(text_parts)
-    # Limpiar caracteres NUL y otros caracteres no válidos para PostgreSQL
+    
+    # Clean invalid characters for PostgreSQL
     text = text.replace('\x00', '')
     text = ''.join(char for char in text if char.isprintable() or char in '\n\r\t')
-    return text
+    
+    return text.strip()
 
+
+# =============================================================================
+# TEXT PROCESSING
+# =============================================================================
 
 def truncate_content(content: str, max_length: int = MAX_CONTENT_LENGTH) -> str:
-    """Trunca el contenido de forma inteligente, intentando cortar en párrafos."""
+    """Truncate content intelligently at paragraph or sentence boundaries."""
     if len(content) <= max_length:
         return content
     
     truncated = content[:max_length]
+    
+    # Try to cut at paragraph
     last_paragraph = truncated.rfind("\n\n")
     if last_paragraph > max_length * 0.7:
         return truncated[:last_paragraph]
     
+    # Try to cut at sentence
     last_sentence = truncated.rfind(". ")
     if last_sentence > max_length * 0.7:
         return truncated[:last_sentence + 1]
@@ -50,45 +95,48 @@ def truncate_content(content: str, max_length: int = MAX_CONTENT_LENGTH) -> str:
 
 
 def clean_json_text(text: str) -> str:
-    """Limpia y repara JSON malformado."""
+    """Clean and repair malformed JSON from AI responses."""
+    # Remove markdown code blocks
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
-        text = text.split("```")[1].split("```")[0]
+        parts = text.split("```")
+        if len(parts) >= 2:
+            text = parts[1]
     
     text = text.strip()
     
-    # Buscar el JSON entre llaves
+    # Extract JSON object
     start = text.find("{")
     end = text.rfind("}") + 1
     if start != -1 and end > start:
         text = text[start:end]
     
-    # Reparar problemas comunes
-    text = re.sub(r',\s*}', '}', text)  # Coma antes de }
-    text = re.sub(r',\s*]', ']', text)  # Coma antes de ]
-    text = text.replace('\n', ' ')       # Saltos de línea
-    text = re.sub(r'\s+', ' ', text)     # Espacios múltiples
+    # Fix common issues
+    text = re.sub(r',\s*}', '}', text)  # Trailing comma before }
+    text = re.sub(r',\s*]', ']', text)  # Trailing comma before ]
+    text = text.replace('\n', ' ')
+    text = re.sub(r'\s+', ' ', text)
     
     return text
 
 
 def parse_json_response(response_text: str) -> dict:
-    """Parsea la respuesta JSON con múltiples estrategias de reparación."""
-    # Intento 1: Directo
+    """Parse JSON response with multiple repair strategies."""
+    # Direct attempt
     try:
         return json.loads(response_text)
     except json.JSONDecodeError:
         pass
     
-    # Intento 2: Limpiar y reparar
+    # Clean and retry
     try:
         cleaned = clean_json_text(response_text)
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
     
-    # Intento 3: Extraer con regex más agresivo
+    # Aggressive regex extraction
     try:
         match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if match:
@@ -96,109 +144,89 @@ def parse_json_response(response_text: str) -> dict:
     except json.JSONDecodeError:
         pass
     
-    raise ValueError(f"No se pudo parsear JSON: {response_text[:200]}...")
+    raise ValueError(f"Could not parse JSON: {response_text[:200]}...")
 
 
-def call_ollama(prompt: str) -> str:
-    """Llama a Ollama y retorna la respuesta."""
-    client = get_ollama_client()
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=prompt,
-        options={
-            "temperature": 0.7,
-            "num_predict": 4096,
-        }
-    )
-    return response["response"]
-
-
-def call_ollama_text(prompt: str) -> str:
-    """Llama a Ollama y retorna texto plano (sin JSON)."""
-    client = get_ollama_client()
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=prompt,
-        options={
-            "temperature": 0.5,
-            "num_predict": 2048,
-        }
-    )
-    return response["response"].strip()
-
-
-def call_ollama_with_retry(prompt: str) -> dict:
-    """Llama a Ollama con reintentos si falla el parsing JSON."""
+def call_ai_with_retry(prompt: str) -> dict:
+    """Call AI with retries for JSON parsing failures."""
     last_error = None
     
     for attempt in range(MAX_RETRIES):
-        response_text = call_ollama(prompt)
         try:
+            # Try with JSON mode first (Gemini native)
+            response_text = call_ai(prompt, json_mode=True)
             return parse_json_response(response_text)
-        except (json.JSONDecodeError, ValueError) as e:
+        except Exception as e:
             last_error = e
-            continue
+            # Retry without JSON mode
+            try:
+                response_text = call_ai(prompt, json_mode=False)
+                return parse_json_response(response_text)
+            except Exception as e2:
+                last_error = e2
+                continue
     
-    raise last_error
+    if last_error:
+        raise last_error
+    raise ValueError("Failed to get valid JSON response")
 
+
+# =============================================================================
+# CONTENT SUMMARY (Optimized for storage)
+# =============================================================================
 
 def generate_content_summary(content: str, roadmap_title: str, nodes_info: list[dict]) -> str:
     """
-    Genera un resumen optimizado del contenido para usar en generación de nodos.
-    Este resumen reemplaza guardar todo el texto del PDF/TXT.
-    Máximo ~3000 caracteres para mantener la BD ligera.
+    Generate optimized summary for node content generation.
+    Stored in DB instead of full content - max 2000 chars.
     """
-    processed_content = truncate_content(content, max_length=4000)
+    processed_content = truncate_content(content, max_length=5000)
     
-    # Crear lista de temas de los nodos
-    topics_list = "\n".join([f"- {n.get('title', '')}: {n.get('description', '')}" for n in nodes_info])
+    # Build topics list compactly
+    topics = "\n".join([f"• {n.get('title', '')}" for n in nodes_info[:12]])
     
-    prompt = f"""Eres un experto en síntesis de contenido educativo. 
-    
-Analiza el siguiente contenido y genera un RESUMEN ESTRUCTURADO que capture:
-1. Los conceptos principales y definiciones clave
-2. Información relevante para cada tema del roadmap
-3. Datos, ejemplos o casos importantes mencionados
-
-El resumen debe ser útil para generar contenido educativo detallado sobre estos temas:
-{topics_list}
+    prompt = f"""Genera un RESUMEN ESTRUCTURADO y CONCISO del contenido.
 
 REGLAS:
-- Máximo 2500 caracteres
-- Usa bullet points y secciones claras
-- Incluye términos técnicos y definiciones exactas del documento
-- NO incluyas opiniones, solo hechos del documento
+- Máximo 1800 caracteres
+- Usa bullet points cortos
+- Incluye definiciones y conceptos clave
+- NO incluyas opiniones
 
-Título del roadmap: {roadmap_title}
+Temas del roadmap "{roadmap_title}":
+{topics}
 
-Contenido a resumir:
+Contenido:
 {processed_content}
 
-RESUMEN ESTRUCTURADO:"""
+RESUMEN:"""
 
-    summary = call_ollama_text(prompt)
+    summary = call_ai_text(prompt)
     
-    # Limitar a 3000 caracteres máximo
-    if len(summary) > 3000:
-        summary = summary[:2997] + "..."
+    # Enforce max length
+    if len(summary) > MAX_SUMMARY_LENGTH:
+        summary = summary[:MAX_SUMMARY_LENGTH - 3] + "..."
     
     return summary
 
 
+# =============================================================================
+# ROADMAP VALIDATION
+# =============================================================================
+
 def validate_roadmap_structure(roadmap_data: dict, strict: bool = True) -> tuple[bool, dict]:
     """
-    Valida la estructura del roadmap.
+    Validate roadmap structure.
     
     Args:
-        roadmap_data: Datos del roadmap a validar
-        strict: Si True, requiere 3+ nodos por nivel. Si False, acepta 2+ nodos.
+        roadmap_data: Roadmap data to validate
+        strict: If True, requires 3+ nodes per level. If False, accepts 1+ nodes.
     
     Returns:
         Tuple (is_valid, level_counts)
     """
     nodes = roadmap_data.get("nodes", [])
     
-    # Contar nodos por nivel
     level_counts = {"beginner": 0, "intermediate": 0, "advanced": 0}
     
     for node in nodes:
@@ -206,48 +234,46 @@ def validate_roadmap_structure(roadmap_data: dict, strict: bool = True) -> tuple
         if level in level_counts:
             level_counts[level] += 1
     
-    min_nodes = 3 if strict else 2
+    min_nodes = 3 if strict else 1
     max_nodes = 8
     
-    valid = True
-    for level, count in level_counts.items():
-        if count < min_nodes or count > max_nodes:
-            valid = False
-            break
+    valid = all(min_nodes <= count <= max_nodes for count in level_counts.values())
     
     return valid, level_counts
 
 
+# =============================================================================
+# ROADMAP GENERATION - TOON-inspired compact prompts
+# =============================================================================
+
 def generate_roadmap(content: str, title: str) -> dict:
     """
-    Genera un roadmap de aprendizaje estructurado por niveles.
-    Incluye múltiples reintentos con prompts cada vez más específicos.
+    Generate learning roadmap structured by levels.
+    Uses compact prompts for token efficiency.
     """
+    # Use larger context window
     processed_content = truncate_content(content)
 
-    base_prompt = f"""Eres un experto en diseño de rutas de aprendizaje. Analiza el contenido y crea un roadmap educativo completo.
+    # Compact prompt design (TOON-inspired: less syntax, more data)
+    base_prompt = f"""Analiza el contenido y genera un roadmap de aprendizaje.
 
-RESPONDE ÚNICAMENTE CON JSON VÁLIDO. Sin texto adicional.
-
-Formato JSON requerido:
+RESPONDE SOLO JSON:
 {{
-  "description": "Descripción breve del roadmap",
+  "description": "Descripción breve",
   "nodes": [
-    {{"title": "Tema", "description": "Qué aprenderás", "level": "beginner", "order": 0, "prerequisites": []}}
+    {{"title": "Tema", "description": "Qué aprenderás", "level": "beginner|intermediate|advanced", "order": 0, "prerequisites": []}}
   ]
 }}
 
-ESTRUCTURA OBLIGATORIA - CADA NIVEL DEBE TENER ENTRE 3 Y 6 NODOS:
-- beginner (3-6 nodos): Fundamentos y conceptos básicos
-- intermediate (3-6 nodos): Aplicación práctica y técnicas  
-- advanced (3-6 nodos): Temas avanzados y especialización
+ESTRUCTURA (12 nodos total):
+• beginner: 4 nodos - fundamentos
+• intermediate: 4 nodos - aplicación práctica  
+• advanced: 4 nodos - especialización
 
 REGLAS:
-1. MÍNIMO 3 nodos por nivel, MÁXIMO 6 nodos por nivel
-2. Total: 9-18 nodos
-3. Títulos: 2-5 palabras
-4. order: secuencial desde 0
-5. prerequisites: [] para beginner, [1-2 índices previos] para intermediate/advanced
+• titles: 2-5 palabras
+• order: 0-11 secuencial
+• prerequisites: IMPORTANTE - Cada nodo intermediate/advanced DEBE tener al menos 1 prerequisito (use el 'order' de un nodo del nivel anterior). Ejemplo: [0, 1]
 
 Título: {title}
 
@@ -256,131 +282,141 @@ Contenido:
 
 JSON:"""
 
-    # Intento 1: Prompt base
-    roadmap_data = call_ollama_with_retry(base_prompt)
+    # Attempt 1
+    roadmap_data = call_ai_with_retry(base_prompt)
     is_valid, counts = validate_roadmap_structure(roadmap_data, strict=True)
     
     if is_valid:
         return roadmap_data
     
-    # Intento 2: Prompt con énfasis en los niveles que faltan
-    missing_levels = [level for level, count in counts.items() if count < 3]
+    # Attempt 2: More specific
+    missing = [lvl for lvl, cnt in counts.items() if cnt < 3]
     
-    retry_prompt = f"""CORRIGE EL ROADMAP. Faltan nodos en: {', '.join(missing_levels)}.
+    retry_prompt = f"""Tu tarea es GENERAR EL JSON COMPLETO del roadmap.
 
-Nodos actuales: beginner={counts['beginner']}, intermediate={counts['intermediate']}, advanced={counts['advanced']}
+ERROR PREVIO: Faltan nodos. Se requieren estos conteos exactos:
+- beginner: 4 nodos
+- intermediate: 4 nodos
+- advanced: 4 nodos
 
-GENERA UN NUEVO ROADMAP CON EXACTAMENTE:
-- 4 nodos beginner (fundamentos básicos)
-- 4 nodos intermediate (aplicación práctica)
-- 4 nodos advanced (especialización y casos avanzados)
-
-Total: 12 nodos exactos.
-
-RESPONDE SOLO CON JSON:
+GENERA EL JSON SIGUIENDO ESTA ESTRUCTURA EXACTA:
 {{
-  "description": "Descripción",
+  "description": "Descripción...",
   "nodes": [
-    {{"title": "Tema", "description": "Descripción", "level": "beginner|intermediate|advanced", "order": 0, "prerequisites": []}}
+    {{"title": "T1", "description": "...", "level": "beginner", "order": 0, "prerequisites": []}},
+    {{"title": "T2", "description": "...", "level": "beginner", "order": 1, "prerequisites": []}},
+    {{"title": "T3", "description": "...", "level": "beginner", "order": 2, "prerequisites": []}},
+    {{"title": "T4", "description": "...", "level": "beginner", "order": 3, "prerequisites": []}},
+    {{"title": "T5", "description": "...", "level": "intermediate", "order": 4, "prerequisites": [3]}},
+    ... (hasta completar los 12 nodos)
   ]
 }}
+
+NO expliques nada. SOLO JSON.
 
 Título: {title}
-
 Contenido:
-{processed_content}
+{processed_content[:3000]}
 
 JSON:"""
 
-    roadmap_data = call_ollama_with_retry(retry_prompt)
+    roadmap_data = call_ai_with_retry(retry_prompt)
     is_valid, counts = validate_roadmap_structure(roadmap_data, strict=True)
     
     if is_valid:
         return roadmap_data
     
-    # Intento 3: Prompt ultra específico con ejemplos
-    specific_prompt = f"""GENERA EXACTAMENTE 12 NODOS para el roadmap "{title}".
-
-ESTRUCTURA EXACTA REQUERIDA (copia este formato):
-{{
-  "description": "Roadmap de aprendizaje sobre {title}",
-  "nodes": [
-    {{"title": "Concepto Básico 1", "description": "Fundamento esencial", "level": "beginner", "order": 0, "prerequisites": []}},
-    {{"title": "Concepto Básico 2", "description": "Fundamento esencial", "level": "beginner", "order": 1, "prerequisites": []}},
-    {{"title": "Concepto Básico 3", "description": "Fundamento esencial", "level": "beginner", "order": 2, "prerequisites": []}},
-    {{"title": "Concepto Básico 4", "description": "Fundamento esencial", "level": "beginner", "order": 3, "prerequisites": []}},
-    {{"title": "Aplicación 1", "description": "Técnica práctica", "level": "intermediate", "order": 4, "prerequisites": [0, 1]}},
-    {{"title": "Aplicación 2", "description": "Técnica práctica", "level": "intermediate", "order": 5, "prerequisites": [1, 2]}},
-    {{"title": "Aplicación 3", "description": "Técnica práctica", "level": "intermediate", "order": 6, "prerequisites": [2, 3]}},
-    {{"title": "Aplicación 4", "description": "Técnica práctica", "level": "intermediate", "order": 7, "prerequisites": [0, 3]}},
-    {{"title": "Avanzado 1", "description": "Especialización", "level": "advanced", "order": 8, "prerequisites": [4, 5]}},
-    {{"title": "Avanzado 2", "description": "Especialización", "level": "advanced", "order": 9, "prerequisites": [5, 6]}},
-    {{"title": "Avanzado 3", "description": "Especialización", "level": "advanced", "order": 10, "prerequisites": [6, 7]}},
-    {{"title": "Avanzado 4", "description": "Especialización", "level": "advanced", "order": 11, "prerequisites": [4, 7]}}
-  ]
-}}
-
-Reemplaza los títulos y descripciones con temas REALES del contenido.
-Mantén EXACTAMENTE 4 nodos por nivel.
-
-Contenido a analizar:
-{processed_content}
-
-JSON:"""
-
-    roadmap_data = call_ollama_with_retry(specific_prompt)
-    is_valid, counts = validate_roadmap_structure(roadmap_data, strict=True)
+    # Attempt 3: Flexible validation
+    is_valid_flex, _ = validate_roadmap_structure(roadmap_data, strict=False)
     
-    if is_valid:
+    if is_valid_flex:
+        return roadmap_data
+
+    # Attempt 4: Auto-Balancing (Safety Net)
+    # If we have enough total nodes but distribution is wrong (e.g. 0 advanced),
+    # we algorithmically reassign levels based on order.
+    nodes = roadmap_data.get("nodes", [])
+    if len(nodes) >= 6:
+        log_ai("Validation failed but enough nodes present. Auto-balancing levels.")
+        roadmap_data["nodes"] = redistribute_nodes_levels(nodes)
         return roadmap_data
     
-    # Último recurso: Validación flexible (mínimo 2 por nivel)
-    is_valid_flexible, _ = validate_roadmap_structure(roadmap_data, strict=False)
-    
-    if is_valid_flexible:
-        return roadmap_data
-    
-    # Si todo falla, lanzar error con información útil
     raise ValueError(
-        f"No se pudo generar un roadmap válido después de múltiples intentos. "
-        f"Nodos generados - beginner: {counts['beginner']}, "
-        f"intermediate: {counts['intermediate']}, advanced: {counts['advanced']}. "
-        f"Intente con un contenido más extenso o específico."
+        f"No se pudo generar roadmap válido. "
+        f"Nodos: beginner={counts['beginner']}, intermediate={counts['intermediate']}, advanced={counts['advanced']}. "
+        f"Contenido insuficiente para distribuir en 3 niveles."
     )
 
 
+# =============================================================================
+# AUTO-BALANCING UTILS
+# =============================================================================
+
+def redistribute_nodes_levels(nodes: list[dict]) -> list[dict]:
+    """
+    Force balanced distribution of levels based on node order.
+    Used when AI generates enough nodes but fails strict level counts.
+    """
+    # Sort by existing order or list index
+    nodes_sorted = sorted(nodes, key=lambda x: x.get('order', 0))
+    total = len(nodes_sorted)
+    
+    # Calculate partition sizes (approx 33% each)
+    # Prioritize base levels being larger if uneven
+    n_beginner = total // 3 + (1 if total % 3 > 0 else 0)
+    n_intermediate = total // 3 + (1 if total % 3 > 1 else 0)
+    # Rest is advanced
+    
+    for i, node in enumerate(nodes_sorted):
+        # Assign Level
+        if i < n_beginner:
+            new_level = "beginner"
+        elif i < n_beginner + n_intermediate:
+            new_level = "intermediate"
+        else:
+            new_level = "advanced"
+            
+        node['level'] = new_level
+        node['order'] = i  # Ensure strictly sequential order
+        
+        # Repair prerequisites:
+        # Beginner: No prerequisites
+        # Others: Depend on the immediate previous node (Chain structure)
+        # This is a safe default for a linear roadmap
+        if new_level == "beginner":
+            node['prerequisites'] = []
+        else:
+            # Simple chain: depends on i-1
+            node['prerequisites'] = [i - 1]
+            
+    return nodes_sorted
+
+
+# =============================================================================
+# NODE CONTENT GENERATION
+# =============================================================================
+
 def generate_node_content(source_content: str, node_title: str, node_description: str) -> dict:
-    """
-    Genera el contenido detallado de un nodo específico.
-    Incluye qué investigar, recursos sugeridos y puntos clave.
-    """
+    """Generate detailed educational content for a specific node."""
     processed_content = truncate_content(source_content)
 
-    prompt = f"""Genera contenido educativo detallado para el tema "{node_title}".
+    prompt = f"""Genera contenido educativo para "{node_title}".
 
-RESPONDE ÚNICAMENTE CON JSON VÁLIDO.
+RESPONDE JSON:
+{{"content": "## Introducción\\n\\nTexto...\\n\\n## Conceptos\\n\\n- **Concepto**: explicación\\n\\n## Tips\\n\\n- Tip práctico"}}
 
-El campo "content" debe ser Markdown bien estructurado con:
-- ## Headers para secciones
-- **Negritas** para conceptos importantes
-- Listas con viñetas (-)
-- `código` para términos técnicos si aplica
-
-Estructura del contenido:
-1. Breve introducción al tema
-2. Conceptos clave a dominar
-3. Pasos o puntos importantes
-4. Tips prácticos
-
-Formato JSON:
-{{"content": "## Introducción\\n\\nExplicación clara del tema...\\n\\n## Conceptos Clave\\n\\n- **Concepto 1**: explicación\\n- **Concepto 2**: explicación\\n\\n## Puntos Importantes\\n\\n1. Primer punto\\n2. Segundo punto\\n\\n## Tips\\n\\n- Tip práctico 1\\n- Tip práctico 2"}}
+Estructura Markdown:
+- ## Headers
+- **Negritas** para conceptos
+- Listas con -
+- `código` si aplica
 
 Tema: {node_title}
 Contexto: {node_description}
 
-Material de referencia:
+Material:
 {processed_content}
 
 JSON:"""
 
-    return call_ollama_with_retry(prompt)
+    return call_ai_with_retry(prompt)

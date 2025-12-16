@@ -26,13 +26,16 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
   api:
     build: ./backend
     restart: always
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
     environment:
+      - DATABASE_URL=postgresql://merq:merq123@db:5432/merqdb
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma2:2b}
     volumes:

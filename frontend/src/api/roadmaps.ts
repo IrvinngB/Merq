@@ -51,42 +51,42 @@ export const roadmapsApi = {
 
   getById: (id: number) => apiClient.get<Roadmap>(`/roadmaps/${id}`),
 
-  create: (creatorId: number, data: RoadmapCreate) => 
+  create: (creatorId: number, data: RoadmapCreate) =>
     apiClient.post<Roadmap>(`/roadmaps/?creator_id=${creatorId}`, data),
 
-  update: (id: number, data: Partial<RoadmapCreate>) => 
+  update: (id: number, data: Partial<RoadmapCreate>) =>
     apiClient.patch<Roadmap>(`/roadmaps/${id}`, data),
 
   delete: (id: number) => apiClient.delete(`/roadmaps/${id}`),
 
-  getNodes: (roadmapId: number) => 
+  getNodes: (roadmapId: number) =>
     apiClient.get<RoadmapNode[]>(`/roadmaps/${roadmapId}/nodes/`),
 
-  getNode: (roadmapId: number, nodeId: number) => 
+  getNode: (roadmapId: number, nodeId: number) =>
     apiClient.get<RoadmapNode>(`/roadmaps/${roadmapId}/nodes/${nodeId}`),
 
-  createNode: (roadmapId: number, data: NodeCreate) => 
+  createNode: (roadmapId: number, data: NodeCreate) =>
     apiClient.post<RoadmapNode>(`/roadmaps/${roadmapId}/nodes/`, data),
 
-  updateNode: (roadmapId: number, nodeId: number, data: Partial<NodeCreate>) => 
+  updateNode: (roadmapId: number, nodeId: number, data: Partial<NodeCreate>) =>
     apiClient.patch<RoadmapNode>(`/roadmaps/${roadmapId}/nodes/${nodeId}`, data),
 
-  deleteNode: (roadmapId: number, nodeId: number) => 
+  deleteNode: (roadmapId: number, nodeId: number) =>
     apiClient.delete(`/roadmaps/${roadmapId}/nodes/${nodeId}`),
 
   toggleNodeComplete: (roadmapId: number, nodeId: number, isCompleted: boolean) =>
     apiClient.patch<RoadmapNode>(`/roadmaps/${roadmapId}/nodes/${nodeId}`, { is_completed: isCompleted }),
 
-  getConnections: (roadmapId: number) => 
+  getConnections: (roadmapId: number) =>
     apiClient.get<NodeConnection[]>(`/roadmaps/${roadmapId}/connections`),
 
-  createConnection: (roadmapId: number, fromNodeId: number, toNodeId: number) => 
+  createConnection: (roadmapId: number, fromNodeId: number, toNodeId: number) =>
     apiClient.post<NodeConnection>(`/roadmaps/${roadmapId}/connections`, {
       from_node_id: fromNodeId,
       to_node_id: toNodeId
     }),
 
-  deleteConnection: (roadmapId: number, connectionId: number) => 
+  deleteConnection: (roadmapId: number, connectionId: number) =>
     apiClient.delete(`/roadmaps/${roadmapId}/connections/${connectionId}`)
 }
 
@@ -132,6 +132,12 @@ export const aiApi = {
         creator_id: creatorId,
         data
       }
+    )
+  },
+
+  autoLayout: (roadmapId: number) => {
+    return apiClient.post<{ message: string; roadmap_id: number; nodes_updated: number }>(
+      `/ai/${roadmapId}/auto-layout`
     )
   }
 }
