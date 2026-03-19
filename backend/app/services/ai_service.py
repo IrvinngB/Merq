@@ -22,20 +22,22 @@ MAX_RETRIES = 3
 def log_ai(msg):
     print(f"[AI SERVICE] {msg}", flush=True)
 
-def call_ai(prompt: str, json_mode: bool = False) -> str:
+def call_ai(prompt: str, json_mode: bool = False, provider: str = None) -> str:
     """
     Call AI using the Gateway.
-    Strategies: Gemini -> Ollama (handled by Gateway)
+
+    Args:
+        provider: "gemini", "qwen", "ollama", or None (auto-fallback)
     """
     try:
-        response_text, provider_name = gateway.generate(prompt, json_mode)
-        
+        response_text, provider_name = gateway.generate(prompt, json_mode, provider=provider)
+
         # LOGGING
         log_ai(f"Used Provider: {provider_name}")
         log_ai(f"--- AI RESPONSE ({provider_name}) ---")
         log_ai(response_text[:500] + "..." if len(response_text) > 500 else response_text)
         log_ai("-------------------------------")
-        
+
         return response_text
     except Exception as e:
         log_ai(f"CRITICAL AI FAILURE: {e}")
@@ -147,25 +149,25 @@ def parse_json_response(response_text: str) -> dict:
     raise ValueError(f"Could not parse JSON: {response_text[:200]}...")
 
 
-def call_ai_with_retry(prompt: str) -> dict:
+def call_ai_with_retry(prompt: str, provider: str = None) -> dict:
     """Call AI with retries for JSON parsing failures."""
     last_error = None
-    
+
     for attempt in range(MAX_RETRIES):
         try:
-            # Try with JSON mode first (Gemini native)
-            response_text = call_ai(prompt, json_mode=True)
+            # Try with JSON mode first (Gemini/Qwen native)
+            response_text = call_ai(prompt, json_mode=True, provider=provider)
             return parse_json_response(response_text)
         except Exception as e:
             last_error = e
             # Retry without JSON mode
             try:
-                response_text = call_ai(prompt, json_mode=False)
+                response_text = call_ai(prompt, json_mode=False, provider=provider)
                 return parse_json_response(response_text)
             except Exception as e2:
                 last_error = e2
                 continue
-    
+
     if last_error:
         raise last_error
     raise ValueError("Failed to get valid JSON response")
@@ -175,16 +177,16 @@ def call_ai_with_retry(prompt: str) -> dict:
 # CONTENT SUMMARY (Optimized for storage)
 # =============================================================================
 
-def generate_content_summary(content: str, roadmap_title: str, nodes_info: list[dict]) -> str:
+def generate_content_summary(content: str, roadmap_title: str, nodes_info: list[dict], provider: str = None) -> str:
     """
     Generate optimized summary for node content generation.
     Stored in DB instead of full content - max 2000 chars.
     """
     processed_content = truncate_content(content, max_length=5000)
-    
+
     # Build topics list compactly
     topics = "\n".join([f"• {n.get('title', '')}" for n in nodes_info[:12]])
-    
+
     prompt = f"""Genera un RESUMEN ESTRUCTURADO y CONCISO del contenido.
 
 REGLAS:
@@ -201,12 +203,12 @@ Contenido:
 
 RESUMEN:"""
 
-    summary = call_ai_text(prompt)
-    
+    summary = call_ai(prompt, json_mode=False, provider=provider)
+
     # Enforce max length
     if len(summary) > MAX_SUMMARY_LENGTH:
         summary = summary[:MAX_SUMMARY_LENGTH - 3] + "..."
-    
+
     return summary
 
 
@@ -246,10 +248,13 @@ def validate_roadmap_structure(roadmap_data: dict, strict: bool = True) -> tuple
 # ROADMAP GENERATION - TOON-inspired compact prompts
 # =============================================================================
 
-def generate_roadmap(content: str, title: str) -> dict:
+def generate_roadmap(content: str, title: str, provider: str = None) -> dict:
     """
     Generate learning roadmap structured by levels.
     Uses compact prompts for token efficiency.
+
+    Args:
+        provider: "gemini", "qwen", "ollama", or None (auto-fallback)
     """
     # Use larger context window
     processed_content = truncate_content(content)
@@ -267,7 +272,7 @@ RESPONDE SOLO JSON:
 
 ESTRUCTURA (12 nodos total):
 • beginner: 4 nodos - fundamentos
-• intermediate: 4 nodos - aplicación práctica  
+• intermediate: 4 nodos - aplicación práctica
 • advanced: 4 nodos - especialización
 
 REGLAS:
@@ -283,12 +288,12 @@ Contenido:
 JSON:"""
 
     # Attempt 1
-    roadmap_data = call_ai_with_retry(base_prompt)
+    roadmap_data = call_ai_with_retry(base_prompt, provider=provider)
     is_valid, counts = validate_roadmap_structure(roadmap_data, strict=True)
-    
+
     if is_valid:
         return roadmap_data
-    
+
     # Attempt 2: More specific
     missing = [lvl for lvl, cnt in counts.items() if cnt < 3]
     
@@ -320,7 +325,7 @@ Contenido:
 
 JSON:"""
 
-    roadmap_data = call_ai_with_retry(retry_prompt)
+    roadmap_data = call_ai_with_retry(retry_prompt, provider=provider)
     is_valid, counts = validate_roadmap_structure(roadmap_data, strict=True)
     
     if is_valid:
@@ -396,7 +401,7 @@ def redistribute_nodes_levels(nodes: list[dict]) -> list[dict]:
 # NODE CONTENT GENERATION
 # =============================================================================
 
-def generate_node_content(source_content: str, node_title: str, node_description: str) -> dict:
+def generate_node_content(source_content: str, node_title: str, node_description: str, provider: str = None) -> dict:
     """Generate detailed educational content for a specific node."""
     processed_content = truncate_content(source_content)
 
@@ -419,4 +424,4 @@ Material:
 
 JSON:"""
 
-    return call_ai_with_retry(prompt)
+    return call_ai_with_retry(prompt, provider=provider)

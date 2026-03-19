@@ -91,11 +91,16 @@ export const roadmapsApi = {
 }
 
 export const aiApi = {
-  generateRoadmap: (file: File, title: string, creatorId: number) => {
+  generateRoadmap: (file: File, title: string, creatorId: number, provider?: string) => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('title', title)
     formData.append('creator_id', creatorId.toString())
+
+    // Agregar provider si se especifica
+    if (provider) {
+      formData.append('provider', provider)
+    }
 
     return apiClient.post<{ roadmap_id: number; title: string; nodes_count: number; message: string }>(
       '/ai/generate-roadmap',
@@ -107,9 +112,10 @@ export const aiApi = {
     )
   },
 
-  generateNodeContent: (nodeId: number) => {
+  generateNodeContent: (nodeId: number, provider?: string) => {
+    const params = provider ? `?provider=${provider}` : ''
     return apiClient.post<{ message: string; node_id: number }>(
-      `/ai/nodes/${nodeId}/generate-content`,
+      `/ai/nodes/${nodeId}/generate-content${params}`,
       {},
       { timeout: 120000 }
     )

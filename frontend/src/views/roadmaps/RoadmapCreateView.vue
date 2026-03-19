@@ -15,6 +15,8 @@ const file = ref<File | null>(null)
 const textContent = ref('')
 const jsonContent = ref('')
 const inputMode = ref<'file' | 'text' | 'json'>('file')
+const providerMode = ref<'local' | 'api'>('api')  // 'local' = Ollama, 'api' = QWEN/GEMINI
+const apiProvider = ref<'gemini' | 'qwen'>('gemini')  // Solo usado si providerMode === 'api'
 const loading = ref(false)
 const error = ref<string | null>(null)
 const jsonError = ref<string | null>(null)
@@ -129,7 +131,7 @@ async function handleSubmit() {
 
   try {
     if (inputMode.value === 'json') {
-      // Importar desde JSON
+      // Importar desde JSON (no usa provider)
       const parsed = JSON.parse(jsonContent.value)
       const response = await aiApi.importRoadmap(title.value, authStore.user.id, {
         description: parsed.description,
@@ -143,7 +145,7 @@ async function handleSubmit() {
       })
       router.push(`${dashboardRoute.value}/roadmaps/${response.data.roadmap_id}`)
     } else {
-      // Generar con IA local
+      // Generar con IA
       let uploadFile: File
 
       if (inputMode.value === 'text') {
@@ -153,7 +155,17 @@ async function handleSubmit() {
         uploadFile = file.value!
       }
 
-      const response = await aiApi.generateRoadmap(uploadFile, title.value, authStore.user.id)
+      // Determinar provider a enviar
+      const selectedProvider = providerMode.value === 'local'
+        ? 'ollama'
+        : apiProvider.value  // 'gemini' o 'qwen'
+
+      const response = await aiApi.generateRoadmap(
+        uploadFile,
+        title.value,
+        authStore.user.id,
+        selectedProvider
+      )
       router.push(`${dashboardRoute.value}/roadmaps/${response.data.roadmap_id}`)
     }
   } catch (err: unknown) {
@@ -242,6 +254,82 @@ async function handleSubmit() {
               </svg>
               Importar JSON
             </button>
+          </div>
+        </div>
+
+        <!-- Provider Selection -->
+        <div v-if="inputMode !== 'json'" class="mb-6">
+          <label class="block text-sm font-medium text-text mb-3">Proveedor de IA</label>
+
+          <!-- Radio: Local vs API -->
+          <div class="flex gap-3 mb-3">
+            <label
+              class="flex-1 cursor-pointer"
+              :class="providerMode === 'local' ? 'opacity-100' : 'opacity-60 hover:opacity-80'"
+            >
+              <div
+                class="flex items-center gap-3 p-4 rounded-xl border-2 transition-all"
+                :class="providerMode === 'local'
+                  ? 'border-primary bg-primary/10'
+                  : 'border-line hover:border-text-secondary'"
+              >
+                <input
+                  type="radio"
+                  v-model="providerMode"
+                  value="local"
+                  class="w-4 h-4 text-primary border-line focus:ring-primary"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                    <span class="font-medium text-text text-sm">Modelo Local</span>
+                  </div>
+                  <p class="text-xs text-text-secondary mt-1">Ollama (localhost)</p>
+                </div>
+              </div>
+            </label>
+
+            <label
+              class="flex-1 cursor-pointer"
+              :class="providerMode === 'api' ? 'opacity-100' : 'opacity-60 hover:opacity-80'"
+            >
+              <div
+                class="flex items-center gap-3 p-4 rounded-xl border-2 transition-all"
+                :class="providerMode === 'api'
+                  ? 'border-primary bg-primary/10'
+                  : 'border-line hover:border-text-secondary'"
+              >
+                <input
+                  type="radio"
+                  v-model="providerMode"
+                  value="api"
+                  class="w-4 h-4 text-primary border-line focus:ring-primary"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                    </svg>
+                    <span class="font-medium text-text text-sm">API Propia</span>
+                  </div>
+                  <p class="text-xs text-text-secondary mt-1">QWEN o GEMINI</p>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Dropdown para seleccionar API (solo visible si providerMode === 'api') -->
+          <div v-if="providerMode === 'api'" class="ml-6 pl-4 border-l-2 border-primary/30">
+            <label class="block text-xs font-medium text-text-secondary mb-2">Proveedor API</label>
+            <select
+              v-model="apiProvider"
+              class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+            >
+              <option value="gemini">GEMINI (Google)</option>
+              <option value="qwen">QWEN (Alibaba Cloud)</option>
+            </select>
           </div>
         </div>
 

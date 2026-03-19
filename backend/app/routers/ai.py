@@ -85,11 +85,15 @@ async def generate_roadmap_from_file(
     file: UploadFile = File(...),
     title: str = Form(...),
     creator_id: int = Form(...),
+    provider: str = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Recibe un PDF o TXT, extrae el contenido y genera un roadmap de aprendizaje
     con nodos organizados por niveles y conexiones entre ellos.
+
+    Args:
+        provider: "gemini", "qwen", "ollama", or None (auto-fallback)
     """
     extension = file.filename.split(".")[-1].lower() if file.filename else ""
     if extension not in ALLOWED_EXTENSIONS:
@@ -123,10 +127,15 @@ async def generate_roadmap_from_file(
         )
 
     try:
-        roadmap_data = generate_roadmap(text_content, title)
+        roadmap_data = generate_roadmap(text_content, title, provider=provider)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except ConnectionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
@@ -139,13 +148,14 @@ async def generate_roadmap_from_file(
     node_service = NodeService(db)
 
     nodes_data = roadmap_data.get("nodes", [])
-    
+
     # Generar resumen del contenido
     try:
         content_summary = generate_content_summary(
             content=text_content,
             roadmap_title=title,
-            nodes_info=nodes_data
+            nodes_info=nodes_data,
+            provider=provider
         )
     except Exception:
         content_summary = text_content[:2500] + "..." if len(text_content) > 2500 else text_content
@@ -203,10 +213,14 @@ async def generate_roadmap_from_file(
 @router.post("/nodes/{node_id}/generate-content")
 async def generate_node_content_endpoint(
     node_id: int,
+    provider: str = None,
     db: Session = Depends(get_db)
 ):
     """
     Genera el contenido detallado de un nodo específico bajo demanda.
+
+    Args:
+        provider: "gemini", "qwen", "ollama", or None (auto-fallback)
     """
     node_service = NodeService(db)
     roadmap_service = RoadmapService(db)
@@ -229,11 +243,12 @@ async def generate_node_content_endpoint(
         content_data = generate_node_content(
             source_content=roadmap.source_content,
             node_title=node.title,
-            node_description=node.description or ""
+            node_description=node.description or "",
+            provider=provider
         )
-        
+
         node_service.update(node_id, content=content_data.get("content", ""))
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
