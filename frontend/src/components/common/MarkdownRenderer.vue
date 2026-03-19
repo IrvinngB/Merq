@@ -27,7 +27,9 @@ const markedOptions: MarkedOptions = {
 
 const renderedContent = computed(() => {
   if (!props.content) return ''
-  return marked(props.content, markedOptions) as string
+  const html = marked(props.content, markedOptions) as string
+  // GFM task lists render disabled checkboxes by default; enable interaction in the UI.
+  return html.replace(/\sdisabled(="")?/g, '')
 })
 </script>
 
@@ -97,6 +99,12 @@ const renderedContent = computed(() => {
 .markdown-content :deep(li) {
   color: var(--color-text-secondary);
   margin-bottom: 0.25rem;
+}
+
+.markdown-content :deep(input[type="checkbox"]) {
+  margin-right: 0.5rem;
+  accent-color: var(--color-primary);
+  cursor: pointer;
 }
 
 .markdown-content :deep(code:not(pre code)) {

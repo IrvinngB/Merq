@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { BaseButton, LoadingSpinner, MarkdownRenderer } from '@/components/common'
 import RoadmapGraph from '@/components/roadmap/RoadmapGraph.vue'
@@ -12,12 +12,17 @@ const roadmapsStore = useRoadmapsStore()
 const authStore = useAuthStore()
 
 const roadmapId = computed(() => Number(route.params.id))
-const dashboardRoute = computed(() => `/${authStore.user?.username || ''}`)
+const dashboardRoute = computed(() => `/${String(route.params.username || authStore.user?.username || '')}`)
 
 const selectedNode = ref<RoadmapNode | null>(null)
 const showNodePanel = ref(false)
 const generatingContent = ref(false)
 const generationError = ref<string | null>(null)
+const nodeProviderMode = ref<'local' | 'api'>('api')
+const nodeApiProvider = ref<'gemini' | 'qwen'>('gemini')
+const nodeGeminiModel = ref('gemini-flash-latest')
+const nodeQwenModel = ref('qwen-turbo')
+const nodeOllamaModel = ref('gemma2:2b')
 
 // Modo edición
 const editMode = ref(false)
@@ -33,14 +38,22 @@ const autoLayouting = ref(false)
 const nodeForm = ref({
   title: '',
   description: '',
+  track: 'core',
   level: 'beginner' as 'beginner' | 'intermediate' | 'advanced',
   order_index: 0
 })
 
-onMounted(async () => {
-  await roadmapsStore.fetchRoadmap(roadmapId.value)
-  await roadmapsStore.fetchConnections(roadmapId.value)
-})
+const downloading = ref<'json' | 'md' | null>(null)
+
+watch(
+  () => roadmapId.value,
+  async (id) => {
+    if (!Number.isFinite(id) || id <= 0) return
+    await roadmapsStore.fetchRoadmap(id)
+    await roadmapsStore.fetchConnections(id)
+  },
+  { immediate: true }
+)
 
 onUnmounted(() => {
   roadmapsStore.clearCurrent()
@@ -62,6 +75,7 @@ function openEditNodeModal() {
   nodeForm.value = {
     title: selectedNode.value.title,
     description: selectedNode.value.description || '',
+    track: selectedNode.value.track || 'core',
     level: selectedNode.value.level,
     order_index: selectedNode.value.order_index
   }
@@ -74,10 +88,36 @@ function openAddNodeModal(preSelectedLevel?: 'beginner' | 'intermediate' | 'adva
   nodeForm.value = {
     title: '',
     description: '',
+    track: 'core',
     level: preSelectedLevel || 'beginner',
     order_index: maxOrder + 1
   }
   showAddNodeModal.value = true
+}
+
+async function downloadRoadmap(format: 'json' | 'md') {
+  if (!roadmapsStore.currentRoadmap) return
+  downloading.value = format
+  try {
+    const response = await roadmapsApi.exportRoadmap(roadmapsStore.currentRoadmap.id, format)
+    const blob = new Blob([response.data], {
+      type: format === 'json' ? 'application/json' : 'text/markdown'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const safeTitle = (roadmapsStore.currentRoadmap.title || `roadmap-${roadmapsStore.currentRoadmap.id}`)
+      .replace(/\s+/g, '_')
+    a.href = url
+    a.download = `${safeTitle}.${format === 'md' ? 'md' : 'json'}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Error exporting roadmap:', err)
+  } finally {
+    downloading.value = null
+  }
 }
 
 // Guardar edición de nodo
@@ -89,7 +129,10 @@ async function saveNodeEdit() {
     const updated = await roadmapsApi.updateNode(
       roadmapsStore.currentRoadmap.id,
       selectedNode.value.id,
-      nodeForm.value
+      {
+        ...nodeForm.value,
+        track: nodeForm.value.track.trim() || 'core'
+      }
     )
     selectedNode.value = updated.data
     await roadmapsStore.fetchRoadmap(roadmapId.value)
@@ -107,7 +150,10 @@ async function createNode() {
   
   savingNode.value = true
   try {
-    await roadmapsApi.createNode(roadmapsStore.currentRoadmap.id, nodeForm.value)
+    await roadmapsApi.createNode(roadmapsStore.currentRoadmap.id, {
+      ...nodeForm.value,
+      track: nodeForm.value.track.trim() || 'core'
+    })
     await roadmapsStore.fetchRoadmap(roadmapId.value)
     showAddNodeModal.value = false
   } catch (err) {
@@ -175,12 +221,17 @@ async function autoLayoutNodes() {
 
 async function generateNodeContent() {
   if (!selectedNode.value) return
+
+  const provider = nodeProviderMode.value === 'local' ? 'ollama' : nodeApiProvider.value
+  const model = nodeProviderMode.value === 'local'
+    ? nodeOllamaModel.value
+    : (nodeApiProvider.value === 'gemini' ? nodeGeminiModel.value : nodeQwenModel.value)
   
   generatingContent.value = true
   generationError.value = null
   
   try {
-    await aiApi.generateNodeContent(selectedNode.value.id)
+    await aiApi.generateNodeContent(selectedNode.value.id, provider, model)
     await roadmapsStore.fetchRoadmap(roadmapId.value)
     const updatedNode = roadmapsStore.nodes.find(n => n.id === selectedNode.value?.id)
     if (updatedNode) {
@@ -339,6 +390,24 @@ const nodeStats = computed(() => {
               <!-- Edit Mode Toggle -->
               <div class="flex items-center gap-2">
                 <button
+                  @click="downloadRoadmap('json')"
+                  :disabled="downloading !== null"
+                  class="p-2 rounded-lg bg-bg-secondary text-text-secondary hover:text-text hover:bg-bg-secondary/80 transition-colors disabled:opacity-50"
+                  title="Descargar roadmap JSON"
+                >
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16" />
+                  </svg>
+                </button>
+                <button
+                  @click="downloadRoadmap('md')"
+                  :disabled="downloading !== null"
+                  class="p-2 rounded-lg bg-bg-secondary text-text-secondary hover:text-text hover:bg-bg-secondary/80 transition-colors disabled:opacity-50"
+                  title="Descargar roadmap Markdown"
+                >
+                  <span class="text-xs font-bold">MD</span>
+                </button>
+                <button
                   @click="openAddNodeModal()"
                   v-if="editMode"
                   class="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
@@ -433,6 +502,9 @@ const nodeStats = computed(() => {
                         </span>
                       </div>
                       <h2 class="text-xl font-bold text-text">{{ selectedNode.title }}</h2>
+                      <p class="text-xs mt-1 inline-flex items-center px-2 py-1 rounded-lg bg-bg-secondary border border-line text-text-secondary">
+                        Track: {{ selectedNode.track || 'core' }}
+                      </p>
                       <p v-if="selectedNode.description" class="text-text-secondary mt-2 text-sm leading-relaxed">
                         {{ selectedNode.description }}
                       </p>
@@ -488,6 +560,65 @@ const nodeStats = computed(() => {
                     
                     <div v-if="generationError" class="mb-6 p-4 bg-danger/10 border border-danger/20 rounded-xl text-danger text-sm max-w-sm mx-auto">
                       {{ generationError }}
+                    </div>
+
+                    <div class="max-w-sm mx-auto mb-6 text-left space-y-3">
+                      <div>
+                        <label class="block text-xs font-medium text-text-secondary mb-2">Proveedor de IA</label>
+                        <div class="grid grid-cols-2 gap-2">
+                          <button
+                            @click="nodeProviderMode = 'api'"
+                            class="px-3 py-2 rounded-lg border text-sm transition-colors"
+                            :class="nodeProviderMode === 'api' ? 'border-primary text-primary bg-primary/10' : 'border-line text-text-secondary hover:text-text'"
+                          >API</button>
+                          <button
+                            @click="nodeProviderMode = 'local'"
+                            class="px-3 py-2 rounded-lg border text-sm transition-colors"
+                            :class="nodeProviderMode === 'local' ? 'border-primary text-primary bg-primary/10' : 'border-line text-text-secondary hover:text-text'"
+                          >Local</button>
+                        </div>
+                      </div>
+
+                      <div v-if="nodeProviderMode === 'api'">
+                        <label class="block text-xs font-medium text-text-secondary mb-2">Proveedor API</label>
+                        <select
+                          v-model="nodeApiProvider"
+                          class="w-full px-3 py-2 rounded-lg bg-bg border border-line text-text text-sm"
+                        >
+                          <option value="gemini">GEMINI</option>
+                          <option value="qwen">QWEN</option>
+                        </select>
+
+                        <label class="block text-xs font-medium text-text-secondary mt-3 mb-2">Modelo</label>
+                        <select
+                          v-if="nodeApiProvider === 'gemini'"
+                          v-model="nodeGeminiModel"
+                          class="w-full px-3 py-2 rounded-lg bg-bg border border-line text-text text-sm"
+                        >
+                          <option value="gemini-flash-latest">gemini-flash-latest</option>
+                          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                          <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        </select>
+                        <select
+                          v-else
+                          v-model="nodeQwenModel"
+                          class="w-full px-3 py-2 rounded-lg bg-bg border border-line text-text text-sm"
+                        >
+                          <option value="qwen-turbo">qwen-turbo</option>
+                          <option value="qwen-plus">qwen-plus</option>
+                          <option value="qwen-max">qwen-max</option>
+                        </select>
+                      </div>
+
+                      <div v-else>
+                        <label class="block text-xs font-medium text-text-secondary mb-2">Modelo Ollama</label>
+                        <input
+                          v-model="nodeOllamaModel"
+                          type="text"
+                          placeholder="Ej: gemma2:2b"
+                          class="w-full px-3 py-2 rounded-lg bg-bg border border-line text-text text-sm"
+                        />
+                      </div>
                     </div>
 
                     <BaseButton size="lg" @click="generateNodeContent" :loading="generatingContent">
@@ -574,6 +705,16 @@ const nodeStats = computed(() => {
                 </div>
                 
                 <div>
+                  <label class="block text-sm font-medium text-text mb-2">Track</label>
+                  <input
+                    v-model="nodeForm.track"
+                    type="text"
+                    placeholder="Ej: fundamentals, backend, data"
+                    class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+
+                <div>
                   <label class="block text-sm font-medium text-text mb-2">Nivel</label>
                   <select
                     v-model="nodeForm.level"
@@ -648,6 +789,16 @@ const nodeStats = computed(() => {
                   />
                 </div>
                 
+                <div>
+                  <label class="block text-sm font-medium text-text mb-2">Track</label>
+                  <input
+                    v-model="nodeForm.track"
+                    type="text"
+                    placeholder="Ej: fundamentals, backend, data"
+                    class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+
                 <div>
                   <label class="block text-sm font-medium text-text mb-2">Nivel</label>
                   <div class="flex gap-2">

@@ -86,6 +86,7 @@ async def generate_roadmap_from_file(
     title: str = Form(...),
     creator_id: int = Form(...),
     provider: str = Form(None),
+    model: str = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -94,6 +95,7 @@ async def generate_roadmap_from_file(
 
     Args:
         provider: "gemini", "qwen", "ollama", or None (auto-fallback)
+        model: Model override for selected provider (optional)
     """
     extension = file.filename.split(".")[-1].lower() if file.filename else ""
     if extension not in ALLOWED_EXTENSIONS:
@@ -127,7 +129,7 @@ async def generate_roadmap_from_file(
         )
 
     try:
-        roadmap_data = generate_roadmap(text_content, title, provider=provider)
+        roadmap_data = generate_roadmap(text_content, title, provider=provider, model=model)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -155,10 +157,11 @@ async def generate_roadmap_from_file(
             content=text_content,
             roadmap_title=title,
             nodes_info=nodes_data,
-            provider=provider
+            provider=provider,
+            model=model
         )
     except Exception:
-        content_summary = text_content[:2500] + "..." if len(text_content) > 2500 else text_content
+        content_summary = text_content[:12000] + "..." if len(text_content) > 12000 else text_content
 
     roadmap = roadmap_service.create(
         title=title,
@@ -182,6 +185,7 @@ async def generate_roadmap_from_file(
             roadmap_id=roadmap.id,
             title=node_data["title"],
             description=node_data.get("description"),
+            track=node_data.get("track", "core"),
             level=level,
             position_x=position_x,
             position_y=position_y,
@@ -214,6 +218,7 @@ async def generate_roadmap_from_file(
 async def generate_node_content_endpoint(
     node_id: int,
     provider: str = None,
+    model: str = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -221,6 +226,7 @@ async def generate_node_content_endpoint(
 
     Args:
         provider: "gemini", "qwen", "ollama", or None (auto-fallback)
+        model: Model override for selected provider (optional)
     """
     node_service = NodeService(db)
     roadmap_service = RoadmapService(db)
@@ -244,7 +250,8 @@ async def generate_node_content_endpoint(
             source_content=roadmap.source_content,
             node_title=node.title,
             node_description=node.description or "",
-            provider=provider
+            provider=provider,
+            model=model
         )
 
         node_service.update(node_id, content=content_data.get("content", ""))
@@ -315,6 +322,7 @@ async def auto_layout_roadmap(
 class ImportNodeData(BaseModel):
     title: str
     description: Optional[str] = None
+    track: Optional[str] = "core"
     level: str = "beginner"
     order: int = 0
     prerequisites: list[int] = []
@@ -412,6 +420,7 @@ async def import_roadmap_from_json(
             roadmap_id=roadmap.id,
             title=node_data.title,
             description=node_data.description,
+            track=node_data.track or "core",
             level=level,
             position_x=position_x,
             position_y=position_y,

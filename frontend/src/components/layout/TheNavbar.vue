@@ -33,7 +33,7 @@ function handleLogout() {
             <div class="w-9 h-9 bg-gradient-to-br from-primary to-primary-hover rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
               <span class="text-white font-bold text-lg">M</span>
             </div>
-            <span class="text-xl font-bold text-text">Merq</span>
+            <span class="text-xl font-bold text-text">MerQ</span>
           </RouterLink>
         </div>
 

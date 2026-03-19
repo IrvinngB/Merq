@@ -6,6 +6,7 @@ export interface RoadmapNode {
   title: string
   description: string | null
   content: string | null
+  track: string
   level: 'beginner' | 'intermediate' | 'advanced'
   position_x: number
   position_y: number
@@ -36,6 +37,7 @@ export interface NodeCreate {
   title: string
   description?: string
   content?: string
+  track?: string
   level?: 'beginner' | 'intermediate' | 'advanced'
   position_x?: number
   position_y?: number
@@ -87,11 +89,16 @@ export const roadmapsApi = {
     }),
 
   deleteConnection: (roadmapId: number, connectionId: number) =>
-    apiClient.delete(`/roadmaps/${roadmapId}/connections/${connectionId}`)
+    apiClient.delete(`/roadmaps/${roadmapId}/connections/${connectionId}`),
+
+  exportRoadmap: (roadmapId: number, format: 'json' | 'md') =>
+    apiClient.get(`/roadmaps/${roadmapId}/export?format=${format}`, {
+      responseType: 'blob'
+    })
 }
 
 export const aiApi = {
-  generateRoadmap: (file: File, title: string, creatorId: number, provider?: string) => {
+  generateRoadmap: (file: File, title: string, creatorId: number, provider?: string, model?: string) => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('title', title)
@@ -100,6 +107,10 @@ export const aiApi = {
     // Agregar provider si se especifica
     if (provider) {
       formData.append('provider', provider)
+    }
+
+    if (model) {
+      formData.append('model', model)
     }
 
     return apiClient.post<{ roadmap_id: number; title: string; nodes_count: number; message: string }>(
@@ -112,8 +123,11 @@ export const aiApi = {
     )
   },
 
-  generateNodeContent: (nodeId: number, provider?: string) => {
-    const params = provider ? `?provider=${provider}` : ''
+  generateNodeContent: (nodeId: number, provider?: string, model?: string) => {
+    const query = new URLSearchParams()
+    if (provider) query.set('provider', provider)
+    if (model) query.set('model', model)
+    const params = query.toString() ? `?${query.toString()}` : ''
     return apiClient.post<{ message: string; node_id: number }>(
       `/ai/nodes/${nodeId}/generate-content${params}`,
       {},

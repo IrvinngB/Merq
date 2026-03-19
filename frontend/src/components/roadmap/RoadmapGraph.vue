@@ -730,6 +730,7 @@ onUnmounted(() => {
                      pointer-events-none z-30 border border-slate-600/50
                      px-4 py-3 max-w-[240px] text-center leading-relaxed"
             >
+              <div class="mb-1 text-[10px] uppercase tracking-wide text-sky-300">Track: {{ node.track || 'core' }}</div>
               {{ node.description }}
               <div class="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 
                           border-l-[8px] border-r-[8px] border-t-[8px] 

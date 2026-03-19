@@ -1,4 +1,6 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -22,6 +24,7 @@ class NodeCreate(BaseModel):
     title: str
     description: str | None = None
     content: str | None = None
+    track: str = "core"
     level: NodeLevel = NodeLevel.BEGINNER
     position_x: int = 0
     position_y: int = 0
@@ -33,6 +36,7 @@ class NodeUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     content: str | None = None
+    track: str | None = None
     level: NodeLevel | None = None
     position_x: int | None = None
     position_y: int | None = None
@@ -60,6 +64,7 @@ class NodeResponse(BaseModel):
     title: str
     description: str | None
     content: str | None
+    track: str
     level: NodeLevel
     position_x: int
     position_y: int
@@ -97,6 +102,100 @@ def get_roadmap(roadmap_id: int, db: Session = Depends(get_db)):
     if not roadmap:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roadmap not found")
     return roadmap
+
+
+@router.get("/{roadmap_id}/export")
+def export_roadmap(roadmap_id: int, format: str = "json", db: Session = Depends(get_db)):
+    service = RoadmapService(db)
+    node_service = NodeService(db)
+    roadmap = service.get_with_connections(roadmap_id)
+    if not roadmap:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roadmap not found")
+
+    nodes = sorted(list(roadmap.nodes), key=lambda n: n.order_index)
+    node_id_to_order = {n.id: n.order_index for n in nodes}
+    connections = node_service.get_connections(roadmap_id)
+
+    export_nodes = []
+    for node in nodes:
+        prereq_orders = [
+            node_id_to_order.get(c.from_node_id)
+            for c in connections
+            if c.to_node_id == node.id and c.from_node_id in node_id_to_order
+        ]
+        export_nodes.append({
+            "id": node.id,
+            "title": node.title,
+            "description": node.description,
+            "content": node.content,
+            "track": node.track,
+            "level": node.level.value if hasattr(node.level, "value") else str(node.level),
+            "order": node.order_index,
+            "prerequisites": sorted([p for p in prereq_orders if p is not None]),
+            "position_x": node.position_x,
+            "position_y": node.position_y,
+            "is_completed": node.is_completed,
+        })
+
+    payload = {
+        "roadmap": {
+            "id": roadmap.id,
+            "title": roadmap.title,
+            "description": roadmap.description,
+            "creator_id": roadmap.creator_id,
+        },
+        "nodes": export_nodes,
+    }
+
+    safe_title = (roadmap.title or f"roadmap-{roadmap.id}").strip().replace(" ", "_")
+
+    if format.lower() in ("md", "markdown"):
+        level_groups = {"beginner": [], "intermediate": [], "advanced": []}
+        for n in export_nodes:
+            level_groups.setdefault(n["level"], []).append(n)
+
+        lines = [
+            f"# {roadmap.title}",
+            "",
+            roadmap.description or "",
+            "",
+            "## Resumen",
+            f"- Nodos: {len(export_nodes)}",
+            f"- Tracks: {', '.join(sorted({n['track'] for n in export_nodes}))}",
+            "",
+        ]
+
+        for level in ["beginner", "intermediate", "advanced"]:
+            nodes_in_level = sorted(level_groups.get(level, []), key=lambda n: n["order"])
+            if not nodes_in_level:
+                continue
+            lines.append(f"## Nivel {level}")
+            lines.append("")
+            for n in nodes_in_level:
+                lines.append(f"### {n['order']}. {n['title']}")
+                lines.append(f"- Track: {n['track']}")
+                if n["description"]:
+                    lines.append(f"- Descripción: {n['description']}")
+                if n["prerequisites"]:
+                    lines.append(f"- Prerrequisitos: {', '.join(map(str, n['prerequisites']))}")
+                lines.append("")
+            lines.append("")
+
+        markdown = "\n".join(lines).strip() + "\n"
+        return Response(
+            content=markdown,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'}
+        )
+
+    if format.lower() != "json":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid format. Use json or md")
+
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.json"'}
+    )
 
 
 @router.post("/", response_model=RoadmapResponse, status_code=status.HTTP_201_CREATED)
@@ -157,6 +256,7 @@ def create_node(roadmap_id: int, data: NodeCreate, db: Session = Depends(get_db)
         title=data.title,
         description=data.description,
         content=data.content,
+        track=data.track,
         level=data.level,
         position_x=data.position_x,
         position_y=data.position_y,

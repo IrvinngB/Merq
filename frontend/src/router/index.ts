@@ -67,11 +67,18 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+  // Hydrate user from persisted token to avoid intermittent redirects on hard refresh.
+  if (authStore.token && !authStore.user && !authStore.loading) {
+    await authStore.fetchCurrentUser()
+  }
+
+  if (to.meta.requiresAuth && !authStore.token) {
     next({ name: 'login', query: { redirect: to.fullPath } })
+  } else if (to.meta.requiresAuth && authStore.token && !authStore.user) {
+    next({ name: 'login' })
   } else if (to.meta.guest && authStore.isAuthenticated) {
     next(`/${authStore.user?.username}`)
   } else {

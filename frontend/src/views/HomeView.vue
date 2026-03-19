@@ -207,7 +207,7 @@ import { BaseButton, BaseCard } from '@/components/common'
               Roadmaps inteligentes para cualquier tema
             </h2>
             <p class="text-text-secondary text-lg mb-10">
-              Merq usa IA local (Ollama) para transformar cualquier contenido en grafos de aprendizaje interactivos.
+              MerQ usa IA local (Ollama) para transformar cualquier contenido en grafos de aprendizaje interactivos.
             </p>
             
             <div class="space-y-6">

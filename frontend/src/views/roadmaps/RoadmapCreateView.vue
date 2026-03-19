@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { BaseButton, BaseInput } from '@/components/common'
 import { useAuthStore } from '@/stores'
 import { aiApi } from '@/api'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-const dashboardRoute = computed(() => `/${authStore.user?.username || ''}`)
+const dashboardRoute = computed(() => `/${String(route.params.username || authStore.user?.username || '')}`)
 
 const title = ref('')
 const file = ref<File | null>(null)
@@ -17,9 +18,17 @@ const jsonContent = ref('')
 const inputMode = ref<'file' | 'text' | 'json'>('file')
 const providerMode = ref<'local' | 'api'>('api')  // 'local' = Ollama, 'api' = QWEN/GEMINI
 const apiProvider = ref<'gemini' | 'qwen'>('gemini')  // Solo usado si providerMode === 'api'
+const geminiModel = ref('gemini-flash-latest')
+const qwenModel = ref('qwen-turbo')
+const ollamaModel = ref('gemma2:2b')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const jsonError = ref<string | null>(null)
+
+const selectedModel = computed(() => {
+  if (providerMode.value === 'local') return ollamaModel.value
+  return apiProvider.value === 'gemini' ? geminiModel.value : qwenModel.value
+})
 
 // Limpiar error cuando cambia el modo
 watch(inputMode, () => {
@@ -164,7 +173,8 @@ async function handleSubmit() {
         uploadFile,
         title.value,
         authStore.user.id,
-        selectedProvider
+        selectedProvider,
+        selectedModel.value
       )
       router.push(`${dashboardRoute.value}/roadmaps/${response.data.roadmap_id}`)
     }
@@ -330,6 +340,37 @@ async function handleSubmit() {
               <option value="gemini">GEMINI (Google)</option>
               <option value="qwen">QWEN (Alibaba Cloud)</option>
             </select>
+
+            <label class="block text-xs font-medium text-text-secondary mt-3 mb-2">Modelo</label>
+            <select
+              v-if="apiProvider === 'gemini'"
+              v-model="geminiModel"
+              class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+            >
+              <option value="gemini-flash-latest">gemini-flash-latest</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+            </select>
+
+            <select
+              v-else
+              v-model="qwenModel"
+              class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+            >
+              <option value="qwen-turbo">qwen-turbo</option>
+              <option value="qwen-plus">qwen-plus</option>
+              <option value="qwen-max">qwen-max</option>
+            </select>
+          </div>
+
+          <div v-else class="ml-6 pl-4 border-l-2 border-primary/30">
+            <label class="block text-xs font-medium text-text-secondary mb-2">Modelo local (Ollama)</label>
+            <input
+              v-model="ollamaModel"
+              type="text"
+              placeholder="Ej: gemma2:2b, llama3.2:3b"
+              class="w-full px-4 py-2.5 bg-bg border border-line rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+            />
           </div>
         </div>
 

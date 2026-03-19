@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { RouterLink } from 'vue-router'
 import { BaseButton, LoadingSpinner } from '@/components/common'
 import { useAuthStore, useRoadmapsStore } from '@/stores'
 
+const route = useRoute()
 const authStore = useAuthStore()
 const roadmapsStore = useRoadmapsStore()
 
@@ -11,18 +13,23 @@ const showDeleteConfirm = ref(false)
 const roadmapToDelete = ref<{ id: number; title: string } | null>(null)
 
 const userRoutes = computed(() => {
-  const username = authStore.user?.username || ''
+  const username = String(route.params.username || authStore.user?.username || '')
   return {
     roadmapsNew: `/${username}/roadmaps/new`,
     roadmap: (id: number) => `/${username}/roadmaps/${id}`
   }
 })
 
-onMounted(() => {
-  if (authStore.user?.id) {
-    roadmapsStore.fetchMyRoadmaps(authStore.user.id)
+watch(
+  () => authStore.user?.id,
+  (userId) => {
+    if (userId) {
+      roadmapsStore.fetchMyRoadmaps(userId)
+    }
   }
-})
+  ,
+  { immediate: true }
+)
 
 function openDeleteConfirm(roadmap: { id: number; title: string }, event: Event) {
   event.preventDefault()

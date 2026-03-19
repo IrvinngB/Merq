@@ -34,6 +34,7 @@ class RoadmapNode(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text)
     content = Column(Text)
+    track = Column(String(80), nullable=False, default="core", server_default="core")
     level = Column(SQLEnum(NodeLevel), default=NodeLevel.BEGINNER)
     position_x = Column(Integer, default=0)
     position_y = Column(Integer, default=0)
